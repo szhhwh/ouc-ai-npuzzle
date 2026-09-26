@@ -27,7 +27,11 @@ public class PuzzleBoard extends State {
     private final int size;
     //缓存的空格线性下标
     private final int blank;
-    //缓存的哈希值
+    //64bit 盘面编码缓存：每格数字占 4 个 bit（首格在最高位），
+    //4 阶 16 格正好占满一个 long；3 阶只占用低 36 个 bit。
+    //增量构造（next）时避免全盘重扫，必须保留折叠成 int 之前的原始编码。
+    private final long code;
+    //缓存的哈希值（由 code 折叠而来）
     private final int hash;
 
     /**
@@ -35,12 +39,24 @@ public class PuzzleBoard extends State {
      *
      * @param cells 行主序盘面数组，0 表示空格（构造时深拷贝，调用方可继续持有该数组）
      * @param size  盘面边长
+     * @throws IllegalArgumentException 参数非法：size 不在 2..4 范围、长度不等于 size²、值越界或重复
      */
     public PuzzleBoard(byte[] cells, int size) {
+        //fail-fast 参数校验：畸形输入不进入搜索流程，尽早暴露
+        if (cells == null || size < 2 || size > 4 || cells.length != size * size)
+            throw new IllegalArgumentException(
+                    "盘面数组与阶数不匹配：size=" + size + "，cells.length=" + (cells == null ? "null" : cells.length));
+        boolean[] seen = new boolean[cells.length];
+        for (byte c : cells) {
+            if (c < 0 || c >= cells.length || seen[c])
+                throw new IllegalArgumentException("盘面不是 0.." + (cells.length - 1) + " 的排列：发现 " + c);
+            seen[c] = true;
+        }
+
         this.cells = cells.clone();
         this.size = size;
 
-        //构造时计算空格位置与哈希缓存：每格数字占 4 个 bit，
+        //构造时计算空格位置与编码缓存：每格数字占 4 个 bit，
         //16 格（4×4）正好编码为一个 long；3 阶只占用低 36 个 bit。
         long h = 0;
         int b = -1;
@@ -48,8 +64,32 @@ public class PuzzleBoard extends State {
             h = (h << 4) | this.cells[i];
             if (this.cells[i] == 0) b = i;
         }
+        this.code = h;
         this.blank = b;
-        this.hash = (int) (h ^ (h >>> 32));
+        this.hash = fold(h);
+    }
+
+    /**
+     * 增量构造：仅在 {@link #next} 内部使用。
+     * 调用方已持有交换后的 cells、新的空格下标与增量更新后的 64bit 编码，
+     * 无需再全盘扫描。私有保证了所有公共入口仍走全量校验构造。
+     */
+    private PuzzleBoard(byte[] cells, int size, int blank, long code) {
+        this.cells = cells;
+        this.size = size;
+        this.blank = blank;
+        this.code = code;
+        this.hash = fold(code);
+    }
+
+    /**
+     * 把 64bit 盘面编码折叠为 32bit 哈希：乘法散列（Fibonacci 混合常数）。
+     * 不用简单的 {@code (int)(h ^ h>>>32)} 异或折叠——它对"位置对折"的盘面
+     * （第 i 格与对称格互换）会得到相同哈希，3 阶全部排列只覆盖一半的哈希空间；
+     * 乘以奇素数常数后高位充分混入低位，消除该对称盲区。
+     */
+    private static int fold(long code) {
+        return (int) ((code * 0x9E3779B97F4A7C15L) >>> 32);
     }
 
     /**
@@ -106,10 +146,17 @@ public class PuzzleBoard extends State {
         }
 
         //复制盘面，交换空格与目标位置的将牌（本对象保持不变）
+        byte v = cells[target];
         byte[] newCells = cells.clone();
-        newCells[blank] = newCells[target];
+        newCells[blank] = v;
         newCells[target] = 0;
-        return new PuzzleBoard(newCells, size);
+
+        //增量更新 64bit 编码：将牌 v（4bit）从 target 槽位搬到 blank 槽位（原为 0）。
+        //槽位 i 的 4bit 段位于第 4*(length-1-i) 位起；新空格下标即 target。
+        long newCode = code
+                + ((long) v << (4 * (cells.length - 1 - blank)))
+                - ((long) v << (4 * (cells.length - 1 - target)));
+        return new PuzzleBoard(newCells, size, target, newCode);
     }
 
     //四个方向动作的不可变复用列表，actions() 直接返回它，不做任何分配
@@ -135,14 +182,14 @@ public class PuzzleBoard extends State {
         //各非空格将牌到其目标位置的曼哈顿距离之和
         predictors.put(MANHATTAN,
                 (state, goal) -> ((PuzzleBoard) state).manhattan((PuzzleBoard) goal));
-        //TODO: 后续阶段实现 DISJOINT_PATTERN（分离模式数据库）启发函数
+        //STAGE3-TODO: 可加模式数据库（DISJOINT_PATTERN）注册行，阶段 3 提交时恢复
     }
 
     /**
      * 根据启发函数类型获得对应的 Predictor
      *
      * @param type 启发函数类型
-     * @return 对应的启发函数；未注册的类型（如尚未实现的 DISJOINT_PATTERN）返回 null
+     * @return 对应的启发函数；未注册的类型返回 null
      */
     public static Predictor predictor(HeuristicType type) {
         return predictors.get(type);
