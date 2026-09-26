@@ -7,6 +7,7 @@ import core.solver.queue.Frontier;
 import core.solver.queue.Node;
 
 import java.util.Deque;
+import java.util.List;
 
 /**
  * Iterative Deepening A*（迭代加深 A*）搜索器。
@@ -151,12 +152,27 @@ public class IdAStar extends AbstractSearcher {
 		// 把当前状态加入"当前路径"集合，此后它下面的子孙若再绕回此状态即成环，须剪掉
 		explored.add(node.getState());
 
-		int min = INFINITY; // 本子树的 nextBound 初值：正无穷
-		for (Node child : problem.childNodes(node, predictor)) {
-			// 计数口径同 BestFirstSearcher：每个由 childNodes 生成的子结点都计数，
-			// 不论它随后是否被环检测剪掉或因 f 超界被剪枝
-			nodesGenerated++;
+		List<Node> children = problem.childNodes(node, predictor);
+		//计数口径同 BestFirstSearcher：每个由 childNodes 生成的子结点都计数，
+		//不论它随后是否被环检测剪掉或因 f 超界被剪枝
+		nodesGenerated += children.size();
 
+		//子节点按 f 值升序排列后再深入（插入排序，子结点至多 4 个，开销可忽略）。
+		//IDA* 的最优性不依赖子结点顺序；但在逼近最优界限的最后几轮迭代中，
+		//目标往往位于 f 值较小的子树，优先深入低 f 分支可以更早命中目标、
+		//提前终止整轮（乃至整个搜索），显著削减最后一轮的无效探索
+		for (int i = 1; i < children.size(); i++) {
+			Node key = children.get(i);
+			int j = i - 1;
+			while (j >= 0 && children.get(j).evaluation() > key.evaluation()) {
+				children.set(j + 1, children.get(j));
+				j--;
+			}
+			children.set(j + 1, key);
+		}
+
+		int min = INFINITY; // 本子树的 nextBound 初值：正无穷
+		for (Node child : children) {
 			// 环检测：只剪"与当前路径上某状态相同"的子结点。
 			// 此刻 explored = 根..node 的整条路径状态，因此：
 			//   a) 子状态等于父状态（直接回退一步）的情形已被自然包含，无需单独比较祖父状态；

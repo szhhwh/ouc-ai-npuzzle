@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 
+import static core.solver.algorithm.heuristic.HeuristicType.DISJOINT_PATTERN;
 import static core.solver.algorithm.heuristic.HeuristicType.MANHATTAN;
 import static core.solver.algorithm.heuristic.HeuristicType.MISPLACED;
 
@@ -182,7 +183,8 @@ public class PuzzleBoard extends State {
         //各非空格将牌到其目标位置的曼哈顿距离之和
         predictors.put(MANHATTAN,
                 (state, goal) -> ((PuzzleBoard) state).manhattan((PuzzleBoard) goal));
-        //STAGE3-TODO: 可加模式数据库（DISJOINT_PATTERN）注册行，阶段 3 提交时恢复
+        //可加模式数据库（6-6-3 / 3-3-2 分组 + 对称增强），第三阶段使用
+        predictors.put(DISJOINT_PATTERN, DisjointPdbHeuristic.predictor());
     }
 
     /**
