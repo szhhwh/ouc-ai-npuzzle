@@ -148,8 +148,10 @@ public final class DisjointPdbHeuristic {
      * 按 goal 盘面取（或懒构建）该 goal 对应的整套 PDB 表。
      * 优先走单槽 memo（引用比较，同一次搜索 O(1) 命中），
      * 失配再以盘面规模与 goal 盘面内容为 key 查/建 BUILT 缓存。
+     *
+     * <p>包内可见：供 {@link NPuzzleIdaStar}（增量查询的专用 IDA*）获取同一套表。</p>
      */
-    private static Tables tablesFor(PuzzleBoard goal) {
+    static Tables tablesFor(PuzzleBoard goal) {
         Memo m = lastMemo;
         if (m != null && m.goal == goal) {
             return m.tables;
@@ -167,28 +169,31 @@ public final class DisjointPdbHeuristic {
     /**
      * 某一 goal 盘面对应的全部分组距离表，以及查询逻辑。
      * 所有字段在构建后只读，线程安全。
+     *
+     * <p>类与字段为包内可见：{@link NPuzzleIdaStar} 直接读取分组、位权与对称表，
+     * 实现逐步移动的 O(1) 增量查询（见其类注释）。</p>
      */
-    private static final class Tables {
+    static final class Tables {
 
         /** 盘面边长 */
-        private final int size;
+        final int size;
         /** 格子总数 size² */
-        private final int cells;
+        final int cells;
         /** 分组定义；null 表示该规模无分组（不支持），h 回退整盘曼哈顿距离 */
-        private final int[][] groups;
+        final int[][] groups;
         /** groups 中每组对应的距离表 */
-        private final byte[][] tables;
+        final byte[][] tables;
         /** goal 盘面原文（构造对称置换与磁盘缓存头校验用） */
-        private final byte[] goalCells;
+        final byte[] goalCells;
         /** goalPos[v]：将牌 v 在 goal 盘面上的线性下标（导出对称置换 π 用） */
         private final int[] goalPos;
 
         /** transpose[i]：格子 i 沿主对角线翻转后的线性下标（对合） */
-        private final int[] transpose;
+        final int[] transpose;
         /** symPerm[v]：将牌值置换 π，π(v) = goal[transpose(pos_goal(v))] */
-        private final int[] symPerm;
+        final int[] symPerm;
         /** 对称增强是否可用：π(0) == 0（即 goal 空格位于主对角线上）时为 true */
-        private final boolean symmetric;
+        final boolean symmetric;
 
         private Tables(int size, int[][] groups, byte[][] tables, byte[] goalCells) {
             this.size = size;
@@ -268,8 +273,11 @@ public final class DisjointPdbHeuristic {
          * 直接接收数组而非 PuzzleBoard，使对称态查询无需构造完整对象（热路径）。
          * 有效状态（各将牌位置互异）的投影必然已被 0-1 BFS 覆盖——
          * BFS 从目标抽象配置出发覆盖整个连通抽象空间。
+         *
+         * <p>包内可见：{@link NPuzzleIdaStar} 的自检模式（-Dnpida.verify）
+         * 以全量查询核对增量维护的启发值。</p>
          */
-        private int hCells(byte[] c, int blank) {
+        int hCells(byte[] c, int blank) {
             //一次线性扫描建 pos[v]（将牌 v 的当前位置），供各组复用
             int[] pos = new int[cells];
             for (int i = 0; i < cells; i++) {

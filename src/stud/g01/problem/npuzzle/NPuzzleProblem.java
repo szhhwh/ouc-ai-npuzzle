@@ -21,6 +21,16 @@ public class NPuzzleProblem extends Problem {
     }
 
     /**
+     * 暴露目标盘面给同包的专用求解器（{@link NPuzzleIdaStar}）：
+     * Problem 的 goal 字段是 protected，包外无法直接读取。
+     *
+     * @return 目标盘面
+     */
+    public PuzzleBoard goalBoard() {
+        return (PuzzleBoard) goal;
+    }
+
+    /**
      * 通用可解性判定：相对任意目标盘面（不限于标准目标）的奇偶性检验。
      *
      * 记 inv 为初始盘面（去掉空格）的排名序列的逆序数——把初始盘面行主序序列中的
