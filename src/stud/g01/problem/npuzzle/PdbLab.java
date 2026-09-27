@@ -275,6 +275,10 @@ public final class PdbLab {
     static final int[][] G_78 = {
             {1, 2, 3, 4, 5, 6, 7}, {8, 9, 10, 11, 12, 13, 14, 15}
     };
+    /** 对照形状：7 组取左上 3×3 的蛇形紧凑块（与横条划分及其转置像都不同构） */
+    static final int[][] G_78C = {
+            {1, 2, 3, 5, 6, 7, 9}, {4, 8, 10, 11, 12, 13, 14, 15}
+    };
 
     static byte[][] loadOrBuild(int gi, int[] tiles, byte[] goalCells) {
         String name = "ranked-" + gi + "-" + tiles.length + "-" + Arrays.hashCode(tiles) + ".bin";
@@ -323,7 +327,7 @@ public final class PdbLab {
         String config = args.length >= 3 ? args[2] : "771";
 
         PuzzleBoard goal = ((NPuzzleProblem) problem).goalBoard();
-        int[][] groups = config.equals("78") ? G_78 : G_771;
+        int[][] groups = config.equals("78") ? G_78 : (config.equals("78c") ? G_78C : G_771);
         byte[][][] tables = new byte[groups.length][][];
         for (int g = 0; g < groups.length; g++) {
             System.out.printf("[lab] 组 %d：%s%n", g, Arrays.toString(groups[g]));
