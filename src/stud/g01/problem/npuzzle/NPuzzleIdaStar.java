@@ -33,7 +33,8 @@ import java.util.Deque;
  * <p>对称增强态 T(s)（转置 τ + 值置换 π 的复合）中被移动的将牌是 π(v)，位置由
  * τ(t) 移到 τ(b)：对称盘面与对称编码同样逐步增量。两条链各维护标量
  * h<sub>D</sub>、h<sub>S</sub>，结点启发值 = max(h<sub>D</sub>, h<sub>S</sub>)
- * ——与全量查询 hMax 数值恒等，仅计算方式不同（-Dnpida.verify 自检）。</p>
+ * ——与全量查询 hMax 数值恒等，仅计算方式不同（等价性证据：两版在全实例上的
+ * 结点数逐位一致，见 docs/optimization-proof.md §5）。</p>
  *
  * <p>【性质二：解长奇偶对齐的界限跳轮】</p>
  * <p>把空格视作最小值 0，对<b>含空格</b>的行主序序列数逆序数 ψ。水平移动交换相邻
@@ -54,7 +55,7 @@ import java.util.Deque;
  * 排序键 f = g+1+max(h<sub>D</sub>,h<sub>S</sub>) 与通用版 child.evaluation() 数值相同。
  * 因此两版搜索树逐结点重合，nodesGenerated / nodesExpanded <b>逐位一致</b>——
  * 这本身就是等价性的实验验证手段（3 阶乘积后端已全实例逐位验证；ranked 后端
- * 经表值交叉验证 + verify 自检）。计数、剪枝、目标判定与 nextBound 语义均与
+ * 经表值交叉验证 + 增量/全量结点数逐位对比）。计数、剪枝、目标判定与 nextBound 语义均与
  * 通用版相同（先剪枝后判目标，f &gt; bound 的目标计入 nextBound 而非提前返回，
  * 杜绝次优解）；奇偶跳轮由性质二保证完备性。</p>
  *
@@ -226,9 +227,6 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
          */
         abstract void apply(int t);
 
-        /** 自检不变量：增量维护的 h_D / h_S == 全量查询值（-Dnpida.verify） */
-        abstract void verifyInvariant();
-
         /**
          * 奇偶对齐的迭代加深主体。返回时 foundMoves 非 null 即找到最优解
          * （空数组表示初始即目标）。
@@ -241,10 +239,6 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
             while (foundMoves == null) {
                 int nextBound = dfs(0, bound);
-                if (TRACE) {
-                    System.out.printf("[nida] bound=%d next=%d gen=%d exp=%d%n",
-                            bound, nextBound, gen, exp);
-                }
                 if (nextBound == INFINITY) {
                     return;   //树被穷尽而无目标：不可解（可解性已检，理论不可达）
                 }
@@ -259,9 +253,6 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
          * 环检测只作用于当前路径、子结点按 f 稳定升序深入）。
          */
         private final int dfs(int depth, int bound) {
-            if (VERIFY) {
-                verifyInvariant();
-            }
             int f = depth + hMax();
             if (f > bound) {
                 return f;
@@ -351,12 +342,6 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             }
             return res;
         }
-
-        /** -Dnpida.verify：每结点以全量查询核对增量维护的 h_D / h_S（调试自检） */
-        private static final boolean VERIFY = Boolean.getBoolean("npida.verify");
-
-        /** -Dnpida.trace：打印每轮迭代的 bound 与 nextBound（调试自检） */
-        private static final boolean TRACE = Boolean.getBoolean("npida.trace");
     }
 
     // ==================================================================
@@ -501,20 +486,6 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
             code += ((long) v << shift[b]) - ((long) v << shift[t]);
             blank = t;
-        }
-
-        @Override
-        void verifyInvariant() {
-            if (tbl.hCells(board, blank) != hD) {
-                throw new IllegalStateException("hD 增量失配：board=" + Arrays.toString(board)
-                        + " 增量=" + hD + " 全量=" + tbl.hCells(board, blank)
-                        + " idx=" + Arrays.toString(idx));
-            }
-            if (symmetric && tbl.hCells(symBoard, transpose[blank]) != hS) {
-                throw new IllegalStateException("hS 增量失配：sym=" + Arrays.toString(symBoard)
-                        + " 增量=" + hS + " 全量=" + tbl.hCells(symBoard, transpose[blank])
-                        + " idxSym=" + Arrays.toString(idxSym));
-            }
         }
 
         private static int pow(int base, int exp) {
@@ -733,18 +704,6 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
             code += ((long) v << shift[b]) - ((long) v << shift[t]);
             blank = t;
-        }
-
-        @Override
-        void verifyInvariant() {
-            if (tbl.hCells(board, blank) != hD) {
-                throw new IllegalStateException("hD(ranked) 增量失配：board=" + Arrays.toString(board)
-                        + " 增量=" + hD + " 全量=" + tbl.hCells(board, blank));
-            }
-            if (symmetric && tbl.hCells(symBoard, transpose[blank]) != hS) {
-                throw new IllegalStateException("hS(ranked) 增量失配：sym=" + Arrays.toString(symBoard)
-                        + " 增量=" + hS + " 全量=" + tbl.hCells(symBoard, transpose[blank]));
-            }
         }
     }
 

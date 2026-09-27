@@ -179,7 +179,7 @@ public final class DisjointPdbHeuristic {
         final int size;
         /** 格子总数 size² */
         final int cells;
-        /** 分组定义；null 表示该规模无分组（不支持），h 回退整盘曼哈顿距离 */
+        /** 分组定义（互不相交的将牌值集合，划分 1..cells−1） */
         final int[][] groups;
         /** groups 中每组对应的距离表 */
         final byte[][] tables;
@@ -273,11 +273,8 @@ public final class DisjointPdbHeuristic {
          * 直接接收数组而非 PuzzleBoard，使对称态查询无需构造完整对象（热路径）。
          * 有效状态（各将牌位置互异）的投影必然已被 0-1 BFS 覆盖——
          * BFS 从目标抽象配置出发覆盖整个连通抽象空间。
-         *
-         * <p>包内可见：{@link NPuzzleIdaStar} 的自检模式（-Dnpida.verify）
-         * 以全量查询核对增量维护的启发值。</p>
          */
-        int hCells(byte[] c, int blank) {
+        private int hCells(byte[] c, int blank) {
             //一次线性扫描建 pos[v]（将牌 v 的当前位置），供各组复用
             int[] pos = new int[cells];
             for (int i = 0; i < cells; i++) {

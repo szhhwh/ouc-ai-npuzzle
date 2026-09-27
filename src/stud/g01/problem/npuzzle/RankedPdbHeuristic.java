@@ -87,8 +87,8 @@ public final class RankedPdbHeuristic {
 
     /**
      * 获得 ranked PDB 启发函数（带对称增强，全量查询）。
-     * 供通用搜索引擎（A* / 通用 IDA*）与增量实现的自检使用；
-     * {@link NPuzzleIdaStar} 的热路径走 {@link #tablesFor} 的增量接口。
+     * 供通用搜索引擎（A* / 通用 IDA*）使用；{@link NPuzzleIdaStar} 的
+     * 热路径走 {@link #tablesFor} 的增量接口。
      */
     public static Predictor predictor() {
         return (state, goal) -> tablesFor((PuzzleBoard) goal).hMax((PuzzleBoard) state);
@@ -196,8 +196,8 @@ public final class RankedPdbHeuristic {
             return Math.max(direct, hCells(t, transpose[state.blank()]));
         }
 
-        /** 全量查表核心（自检与非热路径使用） */
-        int hCells(byte[] c, int blank) {
+        /** 全量查表核心（h/hMax 的公共实现） */
+        private int hCells(byte[] c, int blank) {
             int[] pos = new int[cells];
             for (int i = 0; i < cells; i++) {
                 pos[c[i]] = i;
