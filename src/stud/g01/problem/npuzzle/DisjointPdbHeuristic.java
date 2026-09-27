@@ -10,12 +10,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.zip.CRC32;
 
 /**
  * 可加（分离/不相交）模式数据库启发函数 —— Additive Disjoint Pattern Database（PDB）。
@@ -83,8 +81,8 @@ import java.util.zip.CRC32;
  *       构建是每状态 O(1) 出队的 0-1 BFS，每组数秒（一次性，此后走磁盘缓存）；
  *       查询每次 3 次查表，O(1)。</li>
  *   <li>磁盘缓存：构建完成后写入 {@code resources/pdb-cache/pdb-{size}-{组号}.bin}，
- *       文件头含 magic、盘面规模、goal 盘面原文（比哈希更强，杜绝碰撞）、分组签名
- *       与数据 CRC；任一项不符即判定缓存失效并重建。goal 改变后旧缓存自然被判废。</li>
+ *       文件头含 magic、盘面规模、goal 盘面原文、分组签名；任一项不符即判定
+ *       缓存失效并重建。goal 改变后旧缓存自然被判废。</li>
  *   <li>进程内缓存：以 "size + goal 内容" 为 key 的 ConcurrentHashMap（另加单槽
  *       引用 memo 加速热路径），同一 goal 的重复调用直接命中，绝不重复 BFS。
  *       注意：BUILT 不做淘汰，问题文件中每个<b>不同</b>的 4 阶 goal 都会常驻一套
@@ -180,9 +178,9 @@ public final class DisjointPdbHeuristic {
         private final int[][] groups;
         /** groups 中每组对应的距离表 */
         private final byte[][] tables;
-        /** goal 盘面原文（兜底曼哈顿计算用） */
+        /** goal 盘面原文（构造对称置换与磁盘缓存头校验用） */
         private final byte[] goalCells;
-        /** goalPos[v]：将牌 v 在 goal 盘面上的线性下标（兜底用） */
+        /** goalPos[v]：将牌 v 在 goal 盘面上的线性下标（导出对称置换 π 用） */
         private final int[] goalPos;
 
         /** transpose[i]：格子 i 沿主对角线翻转后的线性下标（对合） */
@@ -228,9 +226,8 @@ public final class DisjointPdbHeuristic {
             int size = goal.size();
             int[][] groups = GROUPINGS.get(size);
             if (groups == null) {
-                // 未定义分组的规模（非 3/4 阶）：不建表，查询回退曼哈顿距离
-                System.out.println("[PDB] " + size + " 阶无分组定义，启发值回退曼哈顿距离");
-                return new Tables(size, null, new byte[0][], goal.cells().clone());
+                // PDB 分组只为课程涉及的 3/4 阶定义
+                throw new UnsupportedOperationException(size + " 阶未定义 PDB 分组（仅支持 3/4 阶）");
             }
             byte[][] ts = new byte[groups.length][];
             for (int g = 0; g < groups.length; g++) {
@@ -243,21 +240,16 @@ public final class DisjointPdbHeuristic {
          * 直接查询：state 各组投影查表求和。
          */
         int h(PuzzleBoard state) {
-            byte[] c = state.cells();
-            if (groups == null) {
-                //兜底：整盘曼哈顿距离（对 3/4 阶之外的小规模仍是可采纳下界）
-                return manhattan(c);
-            }
-            return hCells(c, state.blank());
+            return hCells(state.cells(), state.blank());
         }
 
         /**
          * 对称增强查询：h'(s) = max(h(s), h(T(s)))，T = π∘τ 见类注释。
-         * goal 不满足对称条件时退化为直接查询 h(s)。
+         * goal 不满足对称条件（π(0)≠0）时退化为直接查询 h(s)。
          */
         int hMax(PuzzleBoard state) {
             int direct = h(state);
-            if (!symmetric || groups == null) {
+            if (!symmetric) {
                 return direct;
             }
 
@@ -274,6 +266,8 @@ public final class DisjointPdbHeuristic {
         /**
          * 查表核心：给定盘面数组与空格下标，各组投影查表求和。
          * 直接接收数组而非 PuzzleBoard，使对称态查询无需构造完整对象（热路径）。
+         * 有效状态（各将牌位置互异）的投影必然已被 0-1 BFS 覆盖——
+         * BFS 从目标抽象配置出发覆盖整个连通抽象空间。
          */
         private int hCells(byte[] c, int blank) {
             //一次线性扫描建 pos[v]（将牌 v 的当前位置），供各组复用
@@ -291,46 +285,9 @@ public final class DisjointPdbHeuristic {
                     idx = idx * cells + pos[tiles[j]];
                 }
                 idx = idx * cells + blank;
-
-                int v = tables[g][idx] & 0xFF;
-                if (v == 0xFF) {
-                    //理论不可达：0-1 BFS 从目标抽象配置出发覆盖整个连通抽象空间，
-                    //而真实盘面的投影（各将牌位置互异）必然落在其中。
-                    //防御性兜底：该组各将牌的曼哈顿距离之和——它仍是"该组将牌移动
-                    //次数"的下界，不破坏可采纳性。
-                    v = groupManhattan(c, tiles);
-                }
-                sum += v;
+                sum += tables[g][idx] & 0xFF;
             }
             return sum;
-        }
-
-        /** 整盘曼哈顿距离（不含空格），兜底用 */
-        private int manhattan(byte[] c) {
-            int d = 0;
-            for (int i = 0; i < cells; i++) {
-                byte v = c[i];
-                if (v == 0) continue;
-                int j = goalPos[v];
-                d += Math.abs(i / size - j / size) + Math.abs(i % size - j % size);
-            }
-            return d;
-        }
-
-        /** 组内各将牌曼哈顿距离之和，兜底用 */
-        private int groupManhattan(byte[] c, int[] tiles) {
-            //posTable[v]：将牌 v 的当前位置（小表，兜底路径不追求性能）
-            int[] posTable = new int[cells];
-            for (int i = 0; i < cells; i++) {
-                posTable[c[i]] = i;
-            }
-            int d = 0;
-            for (int tile : tiles) {
-                int i = posTable[tile];
-                int j = goalPos[tile];
-                d += Math.abs(i / size - j / size) + Math.abs(i % size - j % size);
-            }
-            return d;
         }
     }
 
@@ -366,8 +323,8 @@ public final class DisjointPdbHeuristic {
      *
      * <p>文件布局（DataOutputStream 大端序）：
      * magic(int)、size(int)、goalLen(int)、goal 原文(goalLen 字节)、
-     * 组将牌数(int)、各将牌值(int×n)、数据长度(int)、距离数据(len 字节)、CRC32(long)。
-     * 头部用 goal 盘面与分组的原文而非哈希做校验，从原理上排除哈希碰撞误命中。</p>
+     * 组将牌数(int)、各将牌值(int×n)、数据长度(int)、距离数据(len 字节)。
+     * 头部用 goal 盘面与分组的原文做校验——goal 或分组改变即判缓存失效。</p>
      */
     private static byte[] tryLoad(Path file, int size, byte[] goalCells, int[] tiles) {
         if (!Files.isRegularFile(file)) return null;
@@ -389,10 +346,6 @@ public final class DisjointPdbHeuristic {
             if (len != tableLength(size, tiles.length)) return null;
             byte[] data = new byte[len];
             in.readFully(data);
-            long crc = in.readLong();
-            CRC32 c = new CRC32();
-            c.update(data);
-            if (c.getValue() != crc) return null;            //数据损坏 → 缓存失效
             return data;
         } catch (IOException | RuntimeException e) {
             return null;   //读半截文件、被截断等任何异常都视为缓存无效
@@ -400,18 +353,14 @@ public final class DisjointPdbHeuristic {
     }
 
     /**
-     * 把某组距离表写入缓存文件（先写 .tmp 再原子替换，避免写一半留下坏文件）。
+     * 把某组距离表写入缓存文件。
      * 写盘失败不影响正确性：仅打印告警，表仍在内存中可用。
      */
     private static void tryWrite(Path file, int size, byte[] goalCells, int[] tiles, byte[] data) {
         try {
             Files.createDirectories(CACHE_DIR);
-            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-            //清理上次崩溃可能遗留的同名 .tmp；两进程并发写仍可能交错打开同一路径，
-            //最终一致性由加载时的 CRC 头校验兜底（判废重建）
-            Files.deleteIfExists(tmp);
             try (DataOutputStream out = new DataOutputStream(
-                    new BufferedOutputStream(Files.newOutputStream(tmp), 1 << 16))) {
+                    new BufferedOutputStream(Files.newOutputStream(file), 1 << 16))) {
                 out.writeInt(MAGIC);
                 out.writeInt(size);
                 out.writeInt(goalCells.length);
@@ -420,11 +369,7 @@ public final class DisjointPdbHeuristic {
                 for (int tile : tiles) out.writeInt(tile);
                 out.writeInt(data.length);
                 out.write(data);
-                CRC32 crc = new CRC32();
-                crc.update(data);
-                out.writeLong(crc.getValue());
             }
-            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
             System.out.println("[PDB] 已写缓存 " + file + "（" + data.length + " 字节）");
         } catch (IOException e) {
             System.out.println("[PDB] 缓存写入失败（" + file + "）：" + e

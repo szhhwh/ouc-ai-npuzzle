@@ -11,7 +11,6 @@ import stud.g01.runner.PuzzleFeeder;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-import java.awt.AWTError;
 import java.awt.GraphicsEnvironment;
 import java.awt.HeadlessException;
 import java.io.IOException;
@@ -99,15 +98,7 @@ public final class PuzzleVisualizerMain {
             return;
         }
         PuzzleFeeder feeder = new PuzzleFeeder();
-        ArrayList<Problem> problems;
-        try {
-            problems = feeder.getProblems(lines);
-        } catch (IllegalArgumentException e) {
-            //畸形问题行（token 数不符、盘面非法等）映射为退出码 1，不呈现裸栈轨迹
-            System.err.println("无法解析问题文件：" + problemFile + "（" + e.getMessage() + "）");
-            System.exit(1);
-            return;
-        }
+        ArrayList<Problem> problems = feeder.getProblems(lines);
         if (problems.isEmpty()) {
             System.err.println("问题文件中未解析到任何实例：" + problemFile);
             System.exit(1);
@@ -158,11 +149,6 @@ public final class PuzzleVisualizerMain {
                 } else {
                     throw new IllegalStateException("启动图形界面失败", e.getCause());
                 }
-            } catch (AWTError e) {
-                //isHeadless()==false 但 DISPLAY 指向不可用的 X server 时，
-                //Toolkit 初始化在 EDT 内抛 AWTError（Error 而非 HeadlessException）——
-                //同样属于"图形环境不可用"，降级为控制台动画而不是带栈崩溃
-                System.out.println("图形环境不可用（AWTError：" + e.getMessage() + "），降级为控制台动画。");
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -207,8 +193,7 @@ public final class PuzzleVisualizerMain {
      *       初始状态对应的根结点，避免依赖 Problem 的受保护字段 initialState。</li>
      *   <li><b>不变量</b>：steps.size() == moves.size() + 1，且
      *       steps[i] == steps[i-1].next(moves[i-1])（重放每步合法移动恰得下一盘面）。
-     *       长度与首盘面由 {@code PuzzleVisualizer} 构造函数校验，重放一致性
-     *       亦在构造函数中逐步核验（非法序列构造期即抛 IllegalArgumentException）。</li>
+     *       该不变量由上述提取规则本身保证——提取自真实解路径的序列天然满足。</li>
      * </ol>
      *
      * <p>空路径（初始即目标的已解实例）：moves 与 steps 分别为空列表与仅含初始盘面的

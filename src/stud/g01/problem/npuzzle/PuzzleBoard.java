@@ -38,22 +38,11 @@ public class PuzzleBoard extends State {
     /**
      * 用行主序的盘面数组构造一个盘面状态
      *
-     * @param cells 行主序盘面数组，0 表示空格（构造时深拷贝，调用方可继续持有该数组）
+     * @param cells 行主序盘面数组，0 表示空格（构造时深拷贝，调用方可继续持有该数组）；
+     *              应为 0..size²−1 的排列（由问题文件的输入格式保证）
      * @param size  盘面边长
-     * @throws IllegalArgumentException 参数非法：size 不在 2..4 范围、长度不等于 size²、值越界或重复
      */
     public PuzzleBoard(byte[] cells, int size) {
-        //fail-fast 参数校验：畸形输入不进入搜索流程，尽早暴露
-        if (cells == null || size < 2 || size > 4 || cells.length != size * size)
-            throw new IllegalArgumentException(
-                    "盘面数组与阶数不匹配：size=" + size + "，cells.length=" + (cells == null ? "null" : cells.length));
-        boolean[] seen = new boolean[cells.length];
-        for (byte c : cells) {
-            if (c < 0 || c >= cells.length || seen[c])
-                throw new IllegalArgumentException("盘面不是 0.." + (cells.length - 1) + " 的排列：发现 " + c);
-            seen[c] = true;
-        }
-
         this.cells = cells.clone();
         this.size = size;
 

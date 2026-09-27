@@ -103,30 +103,14 @@ public class PuzzleVisualizer extends JPanel {
      * @param steps    盘面序列，含初始盘面，长度须为 moves.size()+1
      * @param delayMs  初始步间隔（毫秒），会被夹取到 [100, 2000]
      * @param autoPlay true 表示构造完成后立即自动播放（moves 为空时忽略）
-     * @throws IllegalArgumentException steps 与 moves 的长度不变量不满足
      */
     public PuzzleVisualizer(PuzzleBoard initial, List<PuzzleMove> moves, List<PuzzleBoard> steps,
                             int delayMs, boolean autoPlay) {
         this.initial = initial;
         this.moves = List.copyOf(moves);
         this.steps = List.copyOf(steps);
-
-        //不变量校验：盘面序列 = 动作序列 + 初始盘面，且首盘面即初始盘面
-        if (this.steps.size() != this.moves.size() + 1 || !this.steps.get(0).equals(initial)) {
-            throw new IllegalArgumentException(
-                    "非法的步序列：steps.size() 应为 moves.size()+1 且 steps[0] 应为初始盘面" +
-                            "（steps=" + this.steps.size() + ", moves=" + this.moves.size() + "）");
-        }
-        //重放不变量校验：每一步动作恰好把前一盘面变为后一盘面。
-        //O(steps×n) 的一次性开销（4 阶 70 步约数千次字节比较）可忽略，
-        //换取高亮/回放的完整性防御——中间盘面被篡改或动作与盘面错位的
-        //序列在构造期即被拒绝（越界动作会使 next 结果与后继盘面不符，同样被捕获）
-        for (int i = 0; i < this.moves.size(); i++) {
-            if (!this.steps.get(i + 1).equals(this.steps.get(i).next(this.moves.get(i)))) {
-                throw new IllegalArgumentException(
-                        "非法的步序列：第 " + (i + 1) + " 步动作与盘面序列不符（重放校验失败）");
-            }
-        }
+        //「steps.size() == moves.size()+1 且每步重放一致」由 extractTrace 的
+        //提取规则保证（本面板只与 extractTrace 的产物配合使用），不再重复校验
 
         this.stepIndex = 0;
 

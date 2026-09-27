@@ -34,29 +34,20 @@ public class PuzzleFeeder extends EngineFeeder {
         for (String line : problemLines) {
             if (line.isBlank()) continue;   //跳过空行
 
+            //每行格式（由问题文件的输入约定保证）：size、size²个初始盘面数字、size²个目标盘面数字
             String[] tokens = line.trim().split("\\s+");
-            int size;
-            try {
-                size = Integer.parseInt(tokens[0]);
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("问题行首个数字（阶数）无法解析，行内容：\"" + line + "\"", e);
-            }
+            int size = Integer.parseInt(tokens[0]);
             int count = size * size;
-
-            //fail-fast：每行应恰为 1 + 2*size² 个数字（size、初始盘面、目标盘面）
-            if (tokens.length != 1 + 2 * count)
-                throw new IllegalArgumentException("问题行格式错误：应有 " + (1 + 2 * count)
-                        + " 个数字，实际 " + tokens.length + " 个；行内容：\"" + line + "\"");
 
             //读入初始盘面
             byte[] initCells = new byte[count];
             for (int i = 0; i < count; i++) {
-                initCells[i] = parseCell(tokens[1 + i], line);
+                initCells[i] = Byte.parseByte(tokens[1 + i]);
             }
             //读入目标盘面
             byte[] goalCells = new byte[count];
             for (int i = 0; i < count; i++) {
-                goalCells[i] = parseCell(tokens[1 + count + i], line);
+                goalCells[i] = Byte.parseByte(tokens[1 + count + i]);
             }
 
             problems.add(new NPuzzleProblem(
@@ -65,22 +56,6 @@ public class PuzzleFeeder extends EngineFeeder {
                     size));
         }
         return problems;
-    }
-
-    /**
-     * 解析盘面单元格数字，失败时抛出带整行内容的异常，便于定位输入错误
-     *
-     * @param token 单个单元格的数字文本
-     * @param line  整行原文（仅用于异常信息）
-     * @return 解析出的字节值
-     */
-    private static byte parseCell(String token, String line) {
-        try {
-            return Byte.parseByte(token);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(
-                    "盘面数字无法解析或超出范围：\"" + token + "\"，行内容：\"" + line + "\"", e);
-        }
     }
 
     /**
