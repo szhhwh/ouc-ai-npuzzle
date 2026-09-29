@@ -1,12 +1,9 @@
 package stud.g01.problem.npuzzle;
 
 import core.problem.Action;
-
 import java.util.Objects;
 
-/**
- * N-Puzzle 的一次移动，方向表示空格的移动方向。
- */
+/** N-Puzzle 的一次移动，方向表示空格的移动方向。 */
 public final class PuzzleMove extends Action {
     private final PuzzleDirection direction;
 

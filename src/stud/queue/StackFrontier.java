@@ -2,9 +2,7 @@ package stud.queue;
 
 import core.solver.queue.Frontier;
 import core.solver.queue.Node;
-
 import java.util.ArrayDeque;
-import java.util.Stack;
 
 public class StackFrontier extends ArrayDeque<Node> implements Frontier {
     @Override

@@ -1,8 +1,6 @@
 package stud.g01.problem.npuzzle;
 
-/**
- * N-Puzzle 中空格的移动方向。
- */
+/** N-Puzzle 中空格的移动方向。 */
 public enum PuzzleDirection {
     UP(-1, 0, "N"),
     RIGHT(0, 1, "E"),
