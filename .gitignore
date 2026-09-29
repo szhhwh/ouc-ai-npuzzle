@@ -1,9 +1,16 @@
 # 编译产物
 out/
 out-test/
+target/
+
+# Maven wrapper 发行包缓存（脚本与配置本身需要入库）
+.mvn/wrapper/*.jar
 
 # 运行结果输出
 result/
+
+# PDB 磁盘缓存（可重建，勿入库）
+resources/pdb-cache/
 
 # IDE 本地配置
 .idea/
