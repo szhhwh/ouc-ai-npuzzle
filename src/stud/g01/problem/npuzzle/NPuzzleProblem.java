@@ -4,12 +4,9 @@ import core.problem.Action;
 import core.problem.Problem;
 import core.problem.State;
 import core.solver.queue.Node;
-
 import java.util.Deque;
 
-/**
- * N-Puzzle 问题定义，包括可解性、动作合法性和解路径输出。
- */
+/** N-Puzzle 问题定义，包括可解性、动作合法性和解路径输出。 */
 public final class NPuzzleProblem extends Problem {
     public NPuzzleProblem(State initialState, State goal) {
         super(initialState, goal);
@@ -70,7 +67,7 @@ public final class NPuzzleProblem extends Problem {
 
     private static int parityInvariant(PuzzleBoard board) {
         int inversions = inversionCount(board.toArray());
-        if (board.getSize() % 2 == 1) {
+        if (board.getSize() % 2 != 0) {
             return inversions % 2;
         }
         int blankRowFromBottom = board.getSize() - board.getBlankRow();

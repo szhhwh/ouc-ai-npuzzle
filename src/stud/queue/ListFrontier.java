@@ -3,16 +3,11 @@ package stud.queue;
 import core.problem.State;
 import core.solver.queue.Frontier;
 import core.solver.queue.Node;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
-/**
- * 虽然性能不高，但可以用于求解所有问题。
- * 请同学们参照编写自己的Frontier类。
- *
- */
+/** 虽然性能不高，但可以用于求解所有问题。 请同学们参照编写自己的Frontier类。 */
 public class ListFrontier extends ArrayList<Node> implements Frontier {
     // 节点优先级比较器，在Node类中定义了三个不同的比较器（
     //      Dijkstra,
@@ -31,7 +26,6 @@ public class ListFrontier extends ArrayList<Node> implements Frontier {
     }
 
     /**
-     *
      * @param node
      * @return
      */
@@ -39,33 +33,31 @@ public class ListFrontier extends ArrayList<Node> implements Frontier {
     public boolean contains(Node node) {
         return getNode(node.getState()) != null;
     }
+
     /**
-     * 将结点node插入到优先队列中，
-     * 如果Frontier中已经存在与node状态相同的结点，则舍弃掉二者中估值更大的结点
+     * 将结点node插入到优先队列中， 如果Frontier中已经存在与node状态相同的结点，则舍弃掉二者中估值更大的结点
+     *
      * @param node 要插入优先队列的结点
      * @return
      */
     @Override
     public boolean offer(Node node) {
         Node oldNode = getNode(node.getState());
-        if (oldNode == null) { //frontier中未找到与node状态相同的节点
-            //按照f值排序时，node应该在的位置
+        if (oldNode == null) { // frontier中未找到与node状态相同的节点
+            // 按照f值排序时，node应该在的位置
             super.add(getIndex(node), node);
             return true;
-        } else { //node是重复访问的节点
+        } else { // node是重复访问的节点
             return discardOrReplace(oldNode, node);
         }
     }
 
     /**
-     *
      * 如果Frontier中已经存在与node状态相同的结点， 则舍弃掉二者之间不好的那一个。
-     *
      *
      * @param oldNode
      * @param node 结点，其状态要么已经出现在Explored中，要么已经出现在Frontier中
      * @return true: replaced; false: discarded
-     *
      */
     private boolean discardOrReplace(Node oldNode, Node node) {
         // 如果旧结点的估值比新的大，即新生成的结点更好
@@ -74,12 +66,12 @@ public class ListFrontier extends ArrayList<Node> implements Frontier {
             replace(oldNode, node);
             return true;
         }
-        return false;   //discard，扔掉新结点
+        return false; // discard，扔掉新结点
     }
 
     private Node getNode(State state) {
-        for (var node : this){
-            if (node.getState().equals(state)){
+        for (var node : this) {
+            if (node.getState().equals(state)) {
                 return node;
             }
         }
@@ -92,7 +84,6 @@ public class ListFrontier extends ArrayList<Node> implements Frontier {
         return index;
     }
 
-
     /**
      * 用节点 e 替换掉具有相同状态的旧节点 oldNode 同学们可能需要改写这个函数！
      *
@@ -102,5 +93,19 @@ public class ListFrontier extends ArrayList<Node> implements Frontier {
     private void replace(Node oldNode, Node newNode) {
         super.remove(oldNode);
         super.add(getIndex(newNode), newNode);
+    }
+
+    /** ArrayList.equals 只比较元素序列，会忽略 evaluator； 重写以将 evaluator 纳入相等性判断，维持 equals/hashCode 契约。 */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (!(obj instanceof ListFrontier)) return false;
+        ListFrontier other = (ListFrontier) obj;
+        return super.equals(obj) && evaluator.equals(other.evaluator);
+    }
+
+    @Override
+    public int hashCode() {
+        return 31 * super.hashCode() + evaluator.hashCode();
     }
 }

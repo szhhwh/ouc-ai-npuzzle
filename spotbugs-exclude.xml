@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!--
+      Problem.initialState / Problem.goal 由 core.problem.Problem 的构造函数写入。
+      因 pom 中 onlyAnalyze 仅分析 stud 包，SpotBugs 看不到 core 包内的写入点，
+      会将 PathFinding.showSolution 对这两个继承字段的读取误报为
+      NP_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD，属于分析范围受限导致的误报，在此排除。
+    -->
+    <Bug pattern="NP_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD">
+        <Class name="stud.problem.pathfinding.PathFinding"/>
+    </Bug>
+</FindBugsFilter>

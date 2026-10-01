@@ -2,7 +2,6 @@ package stud.queue;
 
 import core.solver.queue.Frontier;
 import core.solver.queue.Node;
-
 import java.util.PriorityQueue;
 
 public class PqFrontier extends PriorityQueue<Node> implements Frontier {
@@ -15,5 +14,4 @@ public class PqFrontier extends PriorityQueue<Node> implements Frontier {
     public boolean offer(Node node) {
         return false;
     }
-
 }

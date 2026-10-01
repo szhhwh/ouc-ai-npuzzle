@@ -2,10 +2,7 @@ package stud.problem.pathfinding;
 
 import core.problem.Action;
 
-/**
- *
- * 寻路的移动动作，根据情况，可以NSEW四个方向，或者8个方向。
- */
+/** 寻路的移动动作，根据情况，可以NSEW四个方向，或者8个方向。 */
 public class Move extends Action {
 
     private final Direction direction;
@@ -39,9 +36,15 @@ public class Move extends Action {
 
         if (obj instanceof Move) {
             Move another = (Move) obj;
-            //两个Node对象的状态相同，则认为是相同的
+            // 两个Node对象的状态相同，则认为是相同的
             return this.direction.equals(another.direction);
         }
         return false;
+    }
+
+    /** equals 只比较 direction，hashCode 必须保持一致，否则 violates equals/hashCode 契约 */
+    @Override
+    public int hashCode() {
+        return direction.hashCode();
     }
 }

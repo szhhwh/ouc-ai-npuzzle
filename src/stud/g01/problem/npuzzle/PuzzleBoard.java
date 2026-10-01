@@ -4,21 +4,18 @@ import core.problem.Action;
 import core.problem.State;
 import core.solver.algorithm.heuristic.HeuristicType;
 import core.solver.algorithm.heuristic.Predictor;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * N-Puzzle 的不可变棋盘状态，数字 0 表示空格。
- */
+/** N-Puzzle 的不可变棋盘状态，数字 0 表示空格。 */
 public final class PuzzleBoard extends State {
-    private static final List<PuzzleMove> ALL_MOVES = List.of(
-            new PuzzleMove(PuzzleDirection.UP),
-            new PuzzleMove(PuzzleDirection.RIGHT),
-            new PuzzleMove(PuzzleDirection.DOWN),
-            new PuzzleMove(PuzzleDirection.LEFT)
-    );
+    private static final List<PuzzleMove> ALL_MOVES =
+            List.of(
+                    new PuzzleMove(PuzzleDirection.UP),
+                    new PuzzleMove(PuzzleDirection.RIGHT),
+                    new PuzzleMove(PuzzleDirection.DOWN),
+                    new PuzzleMove(PuzzleDirection.LEFT));
 
     private final int size;
     private final int[] tiles;
@@ -37,8 +34,14 @@ public final class PuzzleBoard extends State {
         }
         if (tiles.length != cellCount) {
             throw new IllegalArgumentException(
-                    "expected " + cellCount + " tiles for a " + size + "x" + size
-                            + " board, but got " + tiles.length);
+                    "expected "
+                            + cellCount
+                            + " tiles for a "
+                            + size
+                            + "x"
+                            + size
+                            + " board, but got "
+                            + tiles.length);
         }
 
         boolean[] seen = new boolean[cellCount];
@@ -106,8 +109,13 @@ public final class PuzzleBoard extends State {
         int targetCol = getBlankCol() + move.getDirection().colOffset();
         if (!isInside(targetRow, targetCol)) {
             throw new IllegalArgumentException(
-                    "illegal move " + move.getDirection() + " from blank position ("
-                            + getBlankRow() + "," + getBlankCol() + ")");
+                    "illegal move "
+                            + move.getDirection()
+                            + " from blank position ("
+                            + getBlankRow()
+                            + ","
+                            + getBlankCol()
+                            + ")");
         }
 
         int targetIndex = targetRow * size + targetCol;
@@ -158,8 +166,8 @@ public final class PuzzleBoard extends State {
                 continue;
             }
             int goalIndex = goalIndexByTile[tile];
-            distance += Math.abs(i / size - goalIndex / size)
-                    + Math.abs(i % size - goalIndex % size);
+            distance +=
+                    Math.abs(i / size - goalIndex / size) + Math.abs(i % size - goalIndex % size);
         }
         return distance;
     }

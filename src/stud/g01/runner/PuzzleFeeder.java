@@ -7,15 +7,12 @@ import core.solver.algorithm.heuristic.Predictor;
 import core.solver.queue.EvaluationType;
 import core.solver.queue.Frontier;
 import core.solver.queue.Node;
+import java.util.ArrayList;
 import stud.g01.problem.npuzzle.NPuzzleProblem;
 import stud.g01.problem.npuzzle.PuzzleBoard;
 import stud.queue.ListFrontier;
 
-import java.util.ArrayList;
-
-/**
- * 从课程文本格式构造 N-Puzzle 问题和搜索所需组件。
- */
+/** 从课程文本格式构造 N-Puzzle 问题和搜索所需组件。 */
 public final class PuzzleFeeder extends EngineFeeder {
     @Override
     public ArrayList<Problem> getProblems(ArrayList<String> problemLines) {
@@ -64,8 +61,12 @@ public final class PuzzleFeeder extends EngineFeeder {
         int expectedFields = 1 + 2 * cellCount;
         if (fields.length != expectedFields) {
             throw new IllegalArgumentException(
-                    "line " + lineNumber + ": expected " + expectedFields
-                            + " integers, but got " + fields.length);
+                    "line "
+                            + lineNumber
+                            + ": expected "
+                            + expectedFields
+                            + " integers, but got "
+                            + fields.length);
         }
 
         int[] initialTiles = new int[cellCount];
@@ -85,8 +86,14 @@ public final class PuzzleFeeder extends EngineFeeder {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException(
-                    "line " + lineNumber + ", field " + fieldNumber
-                            + ": expected an integer, but got '" + value + "'", e);
+                    "line "
+                            + lineNumber
+                            + ", field "
+                            + fieldNumber
+                            + ": expected an integer, but got '"
+                            + value
+                            + "'",
+                    e);
         }
     }
 }
