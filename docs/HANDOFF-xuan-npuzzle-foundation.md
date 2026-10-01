@@ -133,17 +133,9 @@
 
 ### Frontier 性能
 
-当前 `PuzzleFeeder` 使用线性 `ListFrontier`。错位将牌数在第二、第三个 3×3 实例上各需约 31 秒，尚未达到课程第一阶段的 1 秒要求。
-
-后续 Frontier/A* 负责人需要：
-
-- 完成 `src/stud/g01/queue/PqFrontier.java`
-- 支持按 `Node.evaluator(type)` 排序
-- 快速检查同状态结点
-- 在发现更优路径时替换旧结点
-- 保持与 `Frontier` 接口兼容
-
-完成后只需将 `PuzzleFeeder.getFrontier()` 从 `ListFrontier` 切换到高性能实现。
+该项已由 `feature/pq-frontier-performance` 完成：`PuzzleFeeder` 使用
+`src/stud/queue/PqFrontier.java`，支持按 `Node.evaluator(type)` 排序、按状态快速查重以及更优路径替换。
+原先 `src/stud/g01/queue/PqFrontier.java` 的空占位实现已经删除，避免误接入后静默返回无解。
 
 ### 未实现的后续模块
 

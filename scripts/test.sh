@@ -14,3 +14,6 @@ find "$PROJECT_ROOT/test" -name '*.java' -print0 \
 
 java -ea -cp "$PROJECT_ROOT/out:$TEST_OUTPUT_DIR" \
   stud.g01.problem.npuzzle.NPuzzleFoundationTest
+
+java -ea -cp "$PROJECT_ROOT/out:$TEST_OUTPUT_DIR" \
+  stud.queue.PqFrontierTest

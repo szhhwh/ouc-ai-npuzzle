@@ -10,7 +10,7 @@ import core.solver.queue.Node;
 import java.util.ArrayList;
 import stud.g01.problem.npuzzle.NPuzzleProblem;
 import stud.g01.problem.npuzzle.PuzzleBoard;
-import stud.queue.ListFrontier;
+import stud.queue.PqFrontier;
 
 /** 从课程文本格式构造 N-Puzzle 问题和搜索所需组件。 */
 public final class PuzzleFeeder extends EngineFeeder {
@@ -35,7 +35,7 @@ public final class PuzzleFeeder extends EngineFeeder {
         if (type == null) {
             throw new IllegalArgumentException("evaluation type must not be null");
         }
-        return new ListFrontier(Node.evaluator(type));
+        return new PqFrontier(Node.evaluator(type));
     }
 
     @Override
