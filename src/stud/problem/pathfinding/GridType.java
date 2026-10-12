@@ -2,8 +2,7 @@ package stud.problem.pathfinding;
 
 public enum GridType {
     EMPTY('0', 1), // 空地
-    GRASS('*', 5), // 草地，通过的代价高，普通代价的5倍
-    // MUDDY('~', 7),  // 泥地，通过代价为7倍
+    GRASS('*', 5), // 草地，代价为空地的 5 倍
     WALL('+', Integer.MAX_VALUE); // 石墙，无法通过
 
     private final char symbol;

@@ -14,42 +14,13 @@ import java.util.BitSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * ranked（部分排列排名）编码的可加模式数据库启发函数 —— 大组 PDB。
- *
- * <p>与 {@link DisjointPdbHeuristic}（乘积进制编码）的抽象语义完全相同： 分组、空格免费、多源起点、0-1 BFS 建表、对称增强
- * max。唯一区别是<b>编码</b>： 每组状态 (组内将牌位置元组, 空格位置) 被压缩为部分排列排名 {@code R×(cells−k) + q}，消除乘积编码约 80%
- * 的无效空间。这一压缩使 7/8 将牌的大分组成为可能——乘积编码下 16⁸/16⁹ 项超出 int 寻址，而 ranked 编码下 7 组为 P(16,7)×9 = 5.19 亿、8 组为
- * P(16,8)×8 = 41.5 亿项。
- *
- * <p>【编码】k = 组内将牌数，rest = cells−k 个空格候选位置：
- *
- * <ul>
- *   <li>{@code R = Σᵢ Aᵢ·P(cells−1−i, k−1−i)}，Aᵢ = pᵢ 在剔除前 i 个已用位置后 的剩余序（{@code pᵢ − #{j<i : pⱼ <
- *       pᵢ}}），与「取第 Aᵢ 小未用位置」的 逆展开互逆；
- *   <li>{@code q = 空格在剩余位置中的序 = blank − #{pᵢ < blank}}；
- *   <li>8 将牌组的完整逻辑编码达 41.5 亿（超出 int 与 Java 单数组上限）， 故按 q 分块存储：{@code tables[g][q][R]}，每块恰 P(cells,k)
- *       项。
- * </ul>
- *
- * <p>【可采纳性与一致性】与乘积版逐字相同（空格移动为 0 代价边、空格编入状态）， 见 {@link DisjointPdbHeuristic}
- * 类注释——编码方式不改变抽象状态空间与距离语义。 两者已在实验中交叉验证：同分组下随机状态表值全等。
- *
- * <p>【分组】4 阶取 7-7-1：{@code {1..7}}（上两行去右下角）、 {@code {9..15}}（下两行去左上角）、{@code {8}}（单将牌组，退化为该将牌的
- * 曼哈顿距离下界）。实测（problems3.txt 最难 70 步实例）：6-6-3+对称 1.46 亿 生成结点 → 7-7-1+对称 1422 万，结点收益 10.2×。
- *
- * <p>【增量查询】见 {@link NPuzzleIdaStar}：ranked 编码同样支持逐步增量—— 被动组（被移动将牌所属组）的 R 变化为 O(k)（Lehmer 系数的区间传播），
- * 非被动组表值不变、仅 q 平移，且 q 可由组内将牌位置位图 popcount 得 O(1)。
- *
- * <p>【复杂度与内存】7-7-1 表 2×P(16,7)×9 + P(16,1)×15 ≈ 1.04 GB（每字节一项）， 构建 0-1 BFS 每状态 O(k) 出队，约数分钟，此后走磁盘缓存
- * {@code resources/pdb-cache/ranked-{size}-{组号}.bin}（头部含 goal 原文判废）。
- */
+/** 用 ranked 编码（部分排列排名）实现的可加模式数据库启发函数，支持较大的分组。 */
 public final class RankedPdbHeuristic {
 
-    /** 已构建表的进程内缓存：key = 盘面规模 + "#" + goal 盘面内容 */
+    /** 已构建表的进程内缓存，key 由棋盘规模和 goal 内容拼成 */
     private static final Map<String, Tables> BUILT = new ConcurrentHashMap<>();
 
-    /** 单槽 memo：上次查询的 (goal 引用, 表)，热路径免去字符串 key 重建 */
+    /** 单槽缓存，保存上一次查询用的 goal 和对应的表 */
     private static volatile Memo lastMemo;
 
     private static final class Memo {
@@ -66,26 +37,20 @@ public final class RankedPdbHeuristic {
     private static final int MAGIC = 0x52444231; // ASCII "RDB1"
 
     /**
-     * 各盘面规模的分组定义（4 阶 7-8：{1..7} 上两行去右下角 + {8..15} 下两行， 几何上各成连贯区块且互补）。实测（problems3.txt 最难 70
-     * 步实例，含对称增强）： 6-6-3 乘积 145,767,365 gen → 7-7-1 14,226,368 gen → 7-8 3,150,240 gen。 7-8 表 4.67
-     * GB（构建峰值 ~15 GB，一次性后走磁盘缓存）——内存受限场景可将 此常量换为 7-7-1 分组
-     * {{1,2,3,4,5,6,7},{9,10,11,12,13,14,15},{8}}（1.04 GB， 结点数约为 7-8 的 4.5 倍）。其它规模不支持（3 阶沿用 6-6-3
-     * 乘积版）。
+     * 各棋盘规模的分组定义。4 阶取 7-8，即上两行的 {1..7} 与下两行的 {8..15}，两块在盘面上各自连贯且互补。目前只支持 4 阶，3
+     * 阶走乘积版。该分组表很大，内存紧张时可换为 7-7-1。
      */
     private static final Map<Integer, int[][]> GROUPINGS =
             Map.of(4, new int[][] {{1, 2, 3, 4, 5, 6, 7}, {8, 9, 10, 11, 12, 13, 14, 15}});
 
     private RankedPdbHeuristic() {}
 
-    /**
-     * 获得 ranked PDB 启发函数（带对称增强，全量查询）。 供通用搜索引擎（A* / 通用 IDA*）使用；{@link NPuzzleIdaStar} 的 热路径走 {@link
-     * #tablesFor} 的增量接口。
-     */
+    /** 返回带对称增强的启发函数，每次查询都全量查表。供 A* 和通用 IDA* 使用。 */
     public static Predictor predictor() {
         return (state, goal) -> tablesFor((PuzzleBoard) goal).hMax((PuzzleBoard) state);
     }
 
-    /** 按 goal 盘面取（或懒构建）整套 ranked 表。 单槽 memo 引用比较命中 → BUILT 查建，与 DisjointPdbHeuristic 相同模式。 */
+    /** 取 goal 对应的整套表，未构建则构建。查找方式与 DisjointPdbHeuristic 一致。 */
     static Tables tablesFor(PuzzleBoard goal) {
         Memo m = lastMemo;
         if (m != null && m.goal == goal) {
@@ -97,17 +62,13 @@ public final class RankedPdbHeuristic {
         return t;
     }
 
-    // ==================================================================
-    //  一套 ranked 表（某个 goal 对应的全部分组）+ 全量查询
-    // ==================================================================
-
-    /** 某 goal 盘面对应的全部分组距离表与查询逻辑。构建后只读，线程安全。 字段包内可见：{@link NPuzzleIdaStar} 直接读取以实现增量查询。 */
+    /** 某个 goal 对应的全部分组距离表和查询逻辑。字段在构建后只读，线程安全，包内可见，{@link NPuzzleIdaStar} 会直接读来实现增量查询。 */
     static final class Tables {
         final int size;
         final int cells;
         final int[][] groups;
 
-        /** tables[g][q][R]：组 g、空格剩余序 q、tuple 排名 R 的表值 */
+        /** tables[g][q][R] 是组 g 在空格序号 q、排名 R 处的表值 */
         final byte[][][] tables;
 
         final byte[] goalCells;
@@ -115,7 +76,7 @@ public final class RankedPdbHeuristic {
         final int[] symPerm;
         final boolean symmetric;
 
-        /** PERM[a][b] = P(a,b) 部分排列数（按组内最大 k 预填充） */
+        /** perm[a][b] 是部分排列数 P(a,b)，按组内最大的 k 预填到对应长度 */
         final int[][] perm;
 
         Tables(int size, int[][] groups, byte[][][] tables, byte[] goalCells) {
@@ -164,12 +125,12 @@ public final class RankedPdbHeuristic {
             return new Tables(size, groups, ts, goal.cells().clone());
         }
 
-        /** 直接查询：各组投影查表求和（全量，O(Σk²)） */
+        /** 把各组的表值相加 */
         int h(PuzzleBoard state) {
             return hCells(state.cells(), state.blank());
         }
 
-        /** 对称增强查询：max(h(s), h(T(s)))；守卫与 DisjointPdbHeuristic 相同 */
+        /** 取直接查表和与对称态查表中的较大值；不满足对称条件时退化为直接查询 */
         int hMax(PuzzleBoard state) {
             int direct = h(state);
             if (!symmetric) {
@@ -183,7 +144,7 @@ public final class RankedPdbHeuristic {
             return Math.max(direct, hCells(t, transpose[state.blank()]));
         }
 
-        /** 全量查表核心（h/hMax 的公共实现） */
+        /** 全量查表，h 和 hMax 的公共实现 */
         private int hCells(byte[] c, int blank) {
             int[] pos = new int[cells];
             for (int i = 0; i < cells; i++) {
@@ -202,9 +163,7 @@ public final class RankedPdbHeuristic {
             return sum;
         }
 
-        // ―― ranked 编码（实例方法：用本表规模与 perm 权重） ――
-
-        /** tuple 的部分排列排名（O(k²) 全量）。Aᵢ = pᵢ 的剩余序 */
+        /** 计算 tuple 的部分排列排名 */
         int rankTuple(int[] p, int k) {
             int r = 0;
             for (int i = 0; i < k; i++) {
@@ -217,7 +176,7 @@ public final class RankedPdbHeuristic {
             return r;
         }
 
-        /** 空格在剩余位置中的序：blank − #{pᵢ < blank} */
+        /** 计算空格在剩余位置中的序号 */
         int blankRank(int[] p, int k, int blank) {
             int below = 0;
             for (int i = 0; i < k; i++) {
@@ -227,13 +186,8 @@ public final class RankedPdbHeuristic {
         }
     }
 
-    // ==================================================================
-    //  单组距离表：磁盘缓存与 0-1 BFS 构建（按 q 分块寻址）
-    // ==================================================================
-
     private static byte[][] loadOrBuildGroup(int size, byte[] goalCells, int[] tiles, int gi) {
-        // 文件名携带分组签名（组号 + 将牌数 + 各将牌值）：分组常量改变即换文件，
-        // 配合头部 tiles 原文校验双重判废，杜绝不同分组间的缓存误用
+        // 文件名带上分组签名，分组常量一变就换文件，配合头部校验避免不同分组误用同一份缓存
         StringBuilder sig = new StringBuilder("ranked-" + size + "-" + gi + "-" + tiles.length);
         for (int tile : tiles) sig.append('-').append(tile);
         Path file = CACHE_DIR.resolve(sig + ".bin");
@@ -253,7 +207,15 @@ public final class RankedPdbHeuristic {
         return built;
     }
 
-    /** 缓存文件布局：magic、size、goal 原文、组将牌数、各将牌值、块数、每块项数、 逐块数据。任一头字段不符即判废重建（goal 改变自然失效）。 */
+    /**
+     * 从缓存文件读入某一组的距离表，文件不存在或头部字段不匹配时返回 null。
+     *
+     * @param file 缓存文件路径
+     * @param size 棋盘边长
+     * @param goalCells 目标盘面
+     * @param tiles 组内数字
+     * @return 分块距离表，缓存无效时返回 null
+     */
     private static byte[][] tryLoad(Path file, int size, byte[] goalCells, int[] tiles) {
         if (!Files.isRegularFile(file)) return null;
         try (DataInputStream in =
@@ -307,8 +269,12 @@ public final class RankedPdbHeuristic {
     }
 
     /**
-     * 0-1 BFS 构建（与 DisjointPdbHeuristic.buildGroupTable 同构，寻址换为 ranked 分块；邻居重编码为全量
-     * O(k²)，构建为一次性成本，不进热路径）。
+     * 用 0-1 BFS 构建某一组的距离表，按空格序号分块存储。
+     *
+     * @param size 棋盘边长
+     * @param goalCells 目标盘面
+     * @param tiles 组内数字
+     * @return 分块距离表
      */
     private static byte[][] buildRankedTable(int size, byte[] goalCells, int[] tiles) {
         final int cells = size * size;
@@ -321,7 +287,7 @@ public final class RankedPdbHeuristic {
             Arrays.fill(dist[q], (byte) 0xFF);
         }
 
-        // 组内将牌的目标位置
+        // 组内各数字块在目标盘面上的位置
         int[] tp = new int[k];
         for (int i = 0; i < cells; i++) {
             for (int j = 0; j < k; j++) {
@@ -404,7 +370,7 @@ public final class RankedPdbHeuristic {
         return dist;
     }
 
-    // ―― 静态编码工具（构建期使用；查询/增量走 Tables 实例方法） ――
+    // 静态编码工具，供构建期使用
 
     static long pack(int r, int q) {
         return ((long) r << 6) | q;
@@ -444,7 +410,7 @@ public final class RankedPdbHeuristic {
         return blank - below;
     }
 
-    /** 逆展开 R → tuple；返回剩余位置中最小者（调用方按 q 推进到真正的空格位） */
+    /** 由排名逆展开出 tuple，返回剩余位置中最小的那个，调用方再按空格序号推进 */
     static int decodeTuple(int r, int k, int[] p, boolean[] used, int[][] perm, int cells) {
         Arrays.fill(used, false);
         for (int i = 0; i < k; i++) {
@@ -488,10 +454,7 @@ public final class RankedPdbHeuristic {
         return res;
     }
 
-    // ==================================================================
-    //  long 双端队列（0-1 BFS）
-    // ==================================================================
-
+    /** 可增长的循环数组 long 双端队列，供 0-1 BFS 使用 */
     static final class LongDeque {
         private long[] buf;
         private int head = 0;
