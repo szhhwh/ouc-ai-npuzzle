@@ -31,10 +31,16 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure Pages
         uses: actions/configure-pages@v5
+      - name: Stage latest website assets only
+        run: |
+          mkdir -p "${{ runner.temp }}/npuzzle-pages"
+          for asset in index.html style.css study.css app.js results.js examples.js search-trace.js search-lab.js; do
+            cp "visualization/$asset" "${{ runner.temp }}/npuzzle-pages/$asset"
+          done
       - name: Upload visualization
         uses: actions/upload-pages-artifact@v4
         with:
-          path: visualization
+          path: ${{ runner.temp }}/npuzzle-pages
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

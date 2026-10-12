@@ -23,12 +23,14 @@ function render() {
   $('progress').max = states.length - 1; $('progress').value = step;
   $('prev').disabled = step === 0; $('next').disabled = end;
   $('move-label').textContent = end ? reached ? '每一步都算数。目标状态已达成。' : '已播放全部路径；未提供目标状态，不判断是否求解成功。' : step ? `第 ${step} 步 · 数字 ${moved} 滑入空格` : '空格记为留白 · 点击播放，开始探索';
+  if (typeof renderPatterns === 'function') renderPatterns();
 }
 function advance() { if (step < states.length - 1) step++; if (step === states.length - 1) { stop(); render(); return; } render(); timer = setTimeout(advance, Number($('speed').value)); }
 function play() { if (timer) { stop(); render(); return; } if (step === states.length - 1) step = 0; timer = setTimeout(advance, Number($('speed').value)); $('play').innerHTML = 'Ⅱ <span>暂停播放</span>'; render(); }
 function jump(value) { stop(); step = Math.max(0, Math.min(states.length - 1, value)); render(); }
 $('play').onclick = play; $('prev').onclick = () => jump(step - 1); $('next').onclick = () => jump(step + 1); $('reset').onclick = () => jump(0); $('progress').oninput = e => jump(Number(e.target.value));
 document.addEventListener('keydown', e => {
+  if (e.target.closest?.('#search-lab')) return;
   if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.target.isContentEditable) return;
   if (e.code === 'Space') {
     // 保留按钮原生的空格激活行为，避免一次按键触发两次播放切换。
@@ -65,6 +67,7 @@ function load(data, source) {
   $('length').innerHTML=`${states.length-1}<small>步</small>`;
   $('time').innerHTML=data.timeMs == null ? '—' : `${Number(data.timeMs).toFixed(1)}<small>ms</small>`;
   $('generated').textContent=data.generated == null ? '—' : Number(data.generated).toLocaleString();$('expanded').textContent=data.expanded == null ? '—' : Number(data.expanded).toLocaleString();$('source').textContent=source;document.querySelector('.tag').textContent=`${size*size-1}-PUZZLE`;render();
+  if (typeof updateStudy === 'function') updateStudy();
 }
 async function run(){stop();$('solve').disabled=true;$('message').textContent='正在计算最优路径…';if ($('sample').value === 'imported') $('sample').value = '0';await new Promise(resolve=>setTimeout(resolve,40));try{const data=solve(samples[Number($('sample').value)],heuristic);data.goal=[1,2,3,4,5,6,7,8,0];data.algorithm='A*';data.heuristic=heuristic === 'manhattan' ? 'MANHATTAN' : 'MISPLACED';load(data,'浏览器 A* 演示');$('message').textContent='';}catch(e){$('message').textContent=e.message;}finally{$('solve').disabled=false;}}
 $('solve').onclick=run;$('sample').onchange=run;
@@ -91,4 +94,5 @@ function validate(data) {
   return data;
 }
 $('file').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>5_000_000)throw new Error('文件请小于 5 MB');const data=validate(JSON.parse(await file.text()));load(data,'导入的 Java 解路径');$('message').textContent='路径已导入，使用播放按钮查看。';}catch(error){$('message').textContent=`导入失败：${error.message}`;}e.target.value='';};
-window.addEventListener('resize',render);run();
+window.addEventListener('resize',render);
+window.addEventListener('load', () => { if (!window.NPuzzleExamples) run(); });
