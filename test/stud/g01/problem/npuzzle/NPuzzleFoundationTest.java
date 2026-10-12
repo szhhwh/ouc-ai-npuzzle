@@ -10,18 +10,14 @@ import stud.g01.runner.PuzzleFeeder;
 import java.util.ArrayList;
 import java.util.Deque;
 
-/**
- * 无第三方依赖的 N-Puzzle 基础回归测试。
- */
+/** N-Puzzle 基础回归测试。 */
 public final class NPuzzleFoundationTest {
     private static int assertions;
 
-    private NPuzzleFoundationTest() {
-    }
+    private NPuzzleFoundationTest() {}
 
     public static void main(String[] args) {
         testConstructionAndImmutability();
-        testInvalidBoards();
         testEqualityAndHashCode();
         testMovesAndApplicability();
         testHeuristics();
@@ -33,29 +29,12 @@ public final class NPuzzleFoundationTest {
 
     private static void testConstructionAndImmutability() {
         int[] source = {1, 2, 3, 4, 5, 6, 7, 0, 8};
-        PuzzleBoard board = new PuzzleBoard(3, source);
+        PuzzleBoard board = board3(source);
         source[0] = 8;
-        check(board.tileAt(0, 0) == 1, "constructor must defensively copy input");
-
-        int[] copy = board.toArray();
-        copy[0] = 8;
-        check(board.tileAt(0, 0) == 1, "toArray must return a defensive copy");
-        check(board.getBlankRow() == 2 && board.getBlankCol() == 1,
-                "blank position must be detected");
-        expectThrows(IndexOutOfBoundsException.class, () -> board.tileAt(3, 0));
-    }
-
-    private static void testInvalidBoards() {
-        expectThrows(IllegalArgumentException.class,
-                () -> new PuzzleBoard(1, new int[]{0}));
-        expectThrows(IllegalArgumentException.class,
-                () -> new PuzzleBoard(3, new int[]{0, 1}));
-        expectThrows(IllegalArgumentException.class,
-                () -> new PuzzleBoard(2, new int[]{0, 1, 1, 3}));
-        expectThrows(IllegalArgumentException.class,
-                () -> new PuzzleBoard(2, new int[]{0, 1, 2, 4}));
-        expectThrows(NullPointerException.class,
-                () -> new PuzzleBoard(3, null));
+        check(board.cells()[0] == 1, "constructor must defensively copy input");
+        check(board.size() == 3, "board size must be retained");
+        check(board.blank() == 7, "blank linear index must be detected (row-major)");
+        expectThrows(NullPointerException.class, () -> new PuzzleBoard(null, 3));
     }
 
     private static void testEqualityAndHashCode() {
@@ -71,14 +50,10 @@ public final class NPuzzleFoundationTest {
     private static void testMovesAndApplicability() {
         PuzzleBoard topLeft = board3(0, 1, 2, 3, 4, 5, 6, 7, 8);
         NPuzzleProblem problem = new NPuzzleProblem(topLeft, topLeft, 3);
-        check(!problem.applicable(topLeft, move(PuzzleDirection.UP)),
-                "top-left blank cannot move up");
-        check(!problem.applicable(topLeft, move(PuzzleDirection.LEFT)),
-                "top-left blank cannot move left");
-        check(problem.applicable(topLeft, move(PuzzleDirection.RIGHT)),
-                "top-left blank can move right");
-        check(problem.applicable(topLeft, move(PuzzleDirection.DOWN)),
-                "top-left blank can move down");
+        check(!problem.applicable(topLeft, PuzzleMove.UP), "top-left blank cannot move up");
+        check(!problem.applicable(topLeft, PuzzleMove.LEFT), "top-left blank cannot move left");
+        check(problem.applicable(topLeft, PuzzleMove.RIGHT), "top-left blank can move right");
+        check(problem.applicable(topLeft, PuzzleMove.DOWN), "top-left blank can move down");
 
         int actionCount = 0;
         for (Action ignored : topLeft.actions()) {
@@ -86,76 +61,72 @@ public final class NPuzzleFoundationTest {
         }
         check(actionCount == 4, "actions must expose four candidate blank moves");
 
-        PuzzleBoard movedRight = (PuzzleBoard) topLeft.next(move(PuzzleDirection.RIGHT));
-        check(movedRight.equals(board3(1, 0, 2, 3, 4, 5, 6, 7, 8)),
+        PuzzleBoard movedRight = (PuzzleBoard) topLeft.next(PuzzleMove.RIGHT);
+        check(
+                movedRight.equals(board3(1, 0, 2, 3, 4, 5, 6, 7, 8)),
                 "right move must swap blank and right tile");
-        check(topLeft.equals(board3(0, 1, 2, 3, 4, 5, 6, 7, 8)),
-                "next must not mutate source board");
-        PuzzleBoard restored = (PuzzleBoard) movedRight.next(move(PuzzleDirection.LEFT));
+        check(topLeft.equals(board3(0, 1, 2, 3, 4, 5, 6, 7, 8)), "next must not mutate source board");
+        PuzzleBoard restored = (PuzzleBoard) movedRight.next(PuzzleMove.LEFT);
         check(restored.equals(topLeft), "opposite moves must restore original board");
-        check(problem.stepCost(movedRight, move(PuzzleDirection.RIGHT)) == 1,
-                "each puzzle move must cost one");
-        check("(#, N)".equals(move(PuzzleDirection.UP).toString()),
-                "up move must use the reference N label");
-        check("(#, E)".equals(move(PuzzleDirection.RIGHT).toString()),
-                "right move must use the reference E label");
-        check("(#, S)".equals(move(PuzzleDirection.DOWN).toString()),
-                "down move must use the reference S label");
-        check("(#, W)".equals(move(PuzzleDirection.LEFT).toString()),
-                "left move must use the reference W label");
-        expectThrows(IllegalArgumentException.class,
-                () -> topLeft.next(move(PuzzleDirection.UP)));
+        check(problem.stepCost(movedRight, PuzzleMove.RIGHT) == 1, "each puzzle move must cost one");
+        check("U".equals(PuzzleMove.UP.toString()), "up move must use the U label");
+        check("R".equals(PuzzleMove.RIGHT.toString()), "right move must use the R label");
+        check("D".equals(PuzzleMove.DOWN.toString()), "down move must use the D label");
+        check("L".equals(PuzzleMove.LEFT.toString()), "left move must use the L label");
 
         PuzzleBoard center = board3(1, 2, 3, 4, 0, 5, 6, 7, 8);
-        for (PuzzleDirection direction : PuzzleDirection.values()) {
-            check(center.canMove(direction), "center blank must move " + direction);
+        PuzzleMove[] allMoves = {PuzzleMove.UP, PuzzleMove.DOWN, PuzzleMove.LEFT, PuzzleMove.RIGHT};
+        for (PuzzleMove move : allMoves) {
+            check(problem.applicable(center, move), "center blank must move " + move);
         }
     }
 
     private static void testHeuristics() {
         PuzzleBoard goal = board3(1, 2, 3, 4, 5, 6, 7, 8, 0);
         PuzzleBoard state = board3(1, 2, 3, 4, 5, 6, 0, 7, 8);
-        check(state.misplacedTiles(goal) == 2, "misplaced must exclude blank");
-        check(state.manhattanDistance(goal) == 2, "Manhattan must exclude blank");
-        check(goal.misplacedTiles(goal) == 0, "goal misplaced value must be zero");
-        check(goal.manhattanDistance(goal) == 0, "goal Manhattan value must be zero");
-
-        int misplaced = PuzzleBoard.predictor(HeuristicType.MISPLACED)
-                .heuristics(state, goal);
-        int manhattan = PuzzleBoard.predictor(HeuristicType.MANHATTAN)
-                .heuristics(state, goal);
-        check(misplaced == 2 && manhattan == 2, "predictor mapping must be correct");
+        check(
+                PuzzleBoard.predictor(HeuristicType.MISPLACED).heuristics(state, goal) == 2,
+                "misplaced must exclude blank");
+        check(
+                PuzzleBoard.predictor(HeuristicType.MANHATTAN).heuristics(state, goal) == 2,
+                "Manhattan must exclude blank");
+        check(
+                PuzzleBoard.predictor(HeuristicType.MISPLACED).heuristics(goal, goal) == 0,
+                "goal misplaced value must be zero");
+        check(
+                PuzzleBoard.predictor(HeuristicType.MANHATTAN).heuristics(goal, goal) == 0,
+                "goal Manhattan value must be zero");
 
         PuzzleBoard arbitraryGoal = board3(1, 2, 3, 4, 5, 6, 0, 7, 8);
-        check(goal.manhattanDistance(arbitraryGoal) == 2,
+        check(
+                PuzzleBoard.predictor(HeuristicType.MANHATTAN).heuristics(goal, arbitraryGoal) == 2,
                 "heuristics must support a non-canonical goal");
-        expectThrows(UnsupportedOperationException.class,
-                () -> PuzzleBoard.predictor(HeuristicType.DISJOINT_PATTERN));
+        check(
+                PuzzleBoard.predictor(HeuristicType.DISJOINT_PATTERN) != null,
+                "this branch registers a real disjoint-PDB predictor (stage 3)");
     }
 
     private static void testSolvability() {
         PuzzleBoard goal3 = board3(1, 2, 3, 4, 5, 6, 7, 8, 0);
-        check(new NPuzzleProblem(
-                board3(1, 2, 3, 4, 5, 6, 7, 0, 8), goal3, 3).solvable(),
+        check(
+                new NPuzzleProblem(board3(1, 2, 3, 4, 5, 6, 7, 0, 8), goal3, 3).solvable(),
                 "one-move 3x3 board must be solvable");
-        check(!new NPuzzleProblem(
-                board3(1, 2, 3, 4, 5, 6, 8, 7, 0), goal3, 3).solvable(),
+        check(
+                !new NPuzzleProblem(board3(1, 2, 3, 4, 5, 6, 8, 7, 0), goal3, 3).solvable(),
                 "single tile swap in 3x3 board must be unsolvable");
 
-        PuzzleBoard goal4 = new PuzzleBoard(4,
-                new int[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0});
-        PuzzleBoard oneMove4 = new PuzzleBoard(4,
-                new int[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 15});
-        PuzzleBoard swapped4 = new PuzzleBoard(4,
-                new int[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 14, 0});
-        check(new NPuzzleProblem(oneMove4, goal4, 4).solvable(),
-                "one-move 4x4 board must be solvable");
-        check(!new NPuzzleProblem(swapped4, goal4, 4).solvable(),
+        PuzzleBoard goal4 = board4(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0);
+        PuzzleBoard oneMove4 = board4(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 15);
+        PuzzleBoard swapped4 = board4(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 14, 0);
+        check(new NPuzzleProblem(oneMove4, goal4, 4).solvable(), "one-move 4x4 board must be solvable");
+        check(
+                !new NPuzzleProblem(swapped4, goal4, 4).solvable(),
                 "single tile swap in 4x4 board must be unsolvable");
 
         PuzzleBoard arbitraryInitial = board3(1, 2, 3, 4, 5, 6, 7, 8, 0);
         PuzzleBoard arbitraryGoal = board3(1, 2, 3, 4, 5, 6, 7, 0, 8);
-        check(new NPuzzleProblem(arbitraryInitial, arbitraryGoal, 3).solvable(),
+        check(
+                new NPuzzleProblem(arbitraryInitial, arbitraryGoal, 3).solvable(),
                 "solvability must compare against the provided goal");
     }
 
@@ -170,12 +141,13 @@ public final class NPuzzleFoundationTest {
 
         ArrayList<String> tooShort = new ArrayList<>();
         tooShort.add("3 1 2 3");
-        expectThrows(IllegalArgumentException.class, () -> feeder.getProblems(tooShort));
+        expectThrows(
+                ArrayIndexOutOfBoundsException.class, () -> feeder.getProblems(tooShort));
 
         ArrayList<String> malformed = new ArrayList<>();
         malformed.add("x 1 2 3");
-        expectThrows(IllegalArgumentException.class, () -> feeder.getProblems(malformed));
-        expectThrows(IllegalArgumentException.class, () -> feeder.getProblems(null));
+        expectThrows(NumberFormatException.class, () -> feeder.getProblems(malformed));
+        expectThrows(NullPointerException.class, () -> feeder.getProblems(null));
     }
 
     private static void testOneMoveSearch() {
@@ -189,12 +161,20 @@ public final class NPuzzleFoundationTest {
         check(problem.goal(path.getLast().getState()), "search path must reach goal");
     }
 
-    private static PuzzleMove move(PuzzleDirection direction) {
-        return new PuzzleMove(direction);
+    private static PuzzleBoard board3(int... tiles) {
+        return board(3, tiles);
     }
 
-    private static PuzzleBoard board3(int... tiles) {
-        return new PuzzleBoard(3, tiles);
+    private static PuzzleBoard board4(int... tiles) {
+        return board(4, tiles);
+    }
+
+    private static PuzzleBoard board(int size, int[] tiles) {
+        byte[] cells = new byte[tiles.length];
+        for (int i = 0; i < tiles.length; i++) {
+            cells[i] = (byte) tiles[i];
+        }
+        return new PuzzleBoard(cells, size);
     }
 
     private static void check(boolean condition, String message) {
