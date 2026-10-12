@@ -14,14 +14,12 @@ import java.util.Scanner;
 import stud.g01.problem.npuzzle.PuzzleBoard;
 
 /**
- * 第三阶段性能基准：指定启发函数 × 指定引擎，逐实例输出解长与结点数、耗时。
+ * 第三阶段性能基准，按指定的启发函数和引擎逐实例输出解长、结点数和耗时。
  *
- * <p>用法： {@code java stud.g01.runner.Stage3Bench <问题文件> [实例起(1-based,默认1)] [实例止(含,默认末尾)] [测量次数=1]}
- * 系统属性 {@code -Dbench.heuristic=DISJOINT_PATTERN|MANHATTAN|MISPLACED}（默认 DISJOINT_PATTERN）、 {@code
- * -Dbench.engine=ida|astar}（默认 ida）。
+ * <p>用法：{@code java stud.g01.runner.Stage3Bench <问题文件> [起始实例] [结束实例] [测量次数]}。系统属性 {@code
+ * -Dbench.heuristic} 指定启发函数，默认 DISJOINT_PATTERN；{@code -Dbench.engine} 指定引擎，默认 ida。
  *
- * <p>口径与 BenchmarkRunner 一致：每组合先 1 次 JVM 预热（丢弃），再 N 次正式测量， 报告墙上时间的中位数与最小值；结点数为末次测量的值（同输入下逐位确定）。 PDB
- * 表构建发生在首次调用（预热轮），正式测量只计纯求解时间。
+ * <p>每个实例先跑一次预热不计入结果，再正式测量若干次，输出耗时的中位数和最小值。PDB 建表发生在预热轮。
  */
 public final class Stage3Bench {
 
@@ -68,7 +66,7 @@ public final class Stage3Bench {
             for (int r = -1; r < repeats; r++) {
                 AbstractSearcher searcher;
                 switch (engine) {
-                    case "nida": // 专用优化 IDA*（增量 PDB + 奇偶跳轮）
+                    case "nida": // 专用的优化 IDA*
                         searcher =
                                 new stud.g01.problem.npuzzle.NPuzzleIdaStar(
                                         feeder.getFrontier(core.solver.queue.EvaluationType.FULL),
@@ -84,7 +82,7 @@ public final class Stage3Bench {
                 long t0 = System.nanoTime();
                 path = searcher.search(problem);
                 double sec = (System.nanoTime() - t0) / 1e9;
-                if (r < 0) continue; // 预热轮不计数据（PDB 建表也发生在这一轮）
+                if (r < 0) continue; // 预热轮不计入结果
                 times[r] = sec;
                 solutionLen = path == null ? -1 : path.size();
                 gen = searcher.nodesGenerated();

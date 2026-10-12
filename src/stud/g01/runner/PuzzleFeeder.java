@@ -12,13 +12,13 @@ import stud.g01.problem.npuzzle.NPuzzleProblem;
 import stud.g01.problem.npuzzle.PuzzleBoard;
 import stud.queue.PqFrontier;
 
-/** N-Puzzle 问题的 EngineFeeder。 从问题输入样例文本解析问题实例，并为搜索引擎提供 Frontier 与 Predictor。 */
+/** N-Puzzle 问题的 EngineFeeder。从输入文本解析问题实例，并提供 Frontier 和启发函数。 */
 public class PuzzleFeeder extends EngineFeeder {
 
     /**
-     * 解析问题输入样例的每一行（跳过空行），生成问题实例列表。 每行格式：size，随后 size² 个初始盘面数字，最后 size² 个目标盘面数字； 盘面数字按行主序排列，0 表示空格。
+     * 解析输入的每一行，生成问题实例列表，空行跳过。每行的格式是：规模，接着是 size 平方个初始盘面数字，再接着是 size 平方个目标盘面数字，数字按行主序排列，0 表示空格。
      *
-     * @param problemLines 问题输入样例文本的所有行
+     * @param problemLines 输入文本的所有行
      * @return 问题实例列表
      */
     @Override
@@ -26,19 +26,19 @@ public class PuzzleFeeder extends EngineFeeder {
         ArrayList<Problem> problems = new ArrayList<>();
 
         for (String line : problemLines) {
-            if (line.isBlank()) continue; // 跳过空行
+            if (line.isBlank()) continue;
 
-            // 每行格式（由问题文件的输入约定保证）：size、size²个初始盘面数字、size²个目标盘面数字
+            // 每行依次是规模、初始盘面、目标盘面
             String[] tokens = line.trim().split("\\s+");
             int size = Integer.parseInt(tokens[0]);
             int count = size * size;
 
-            // 读入初始盘面
+            // 初始盘面
             byte[] initCells = new byte[count];
             for (int i = 0; i < count; i++) {
                 initCells[i] = Byte.parseByte(tokens[1 + i]);
             }
-            // 读入目标盘面
+            // 目标盘面
             byte[] goalCells = new byte[count];
             for (int i = 0; i < count; i++) {
                 goalCells[i] = Byte.parseByte(tokens[1 + count + i]);
@@ -54,22 +54,21 @@ public class PuzzleFeeder extends EngineFeeder {
     }
 
     /**
-     * 生成采取某种估值机制的 Frontier
+     * 按估值类型生成 Frontier。
      *
-     * @param type 结点评估器的类型
-     * @return 使用评估机制的一个 Frontier 实例
+     * @param type 结点估值类型
+     * @return Frontier 实例
      */
     @Override
     public Frontier getFrontier(EvaluationType type) {
-        // 本组实现的高效 Frontier：PriorityQueue + HashMap 索引 + 惰性删除，均摊 O(log n)
         return new PqFrontier(Node.evaluator(type));
     }
 
     /**
-     * 获得对状态进行估值的 Predictor；启发函数注册在 PuzzleBoard 中
+     * 按类型取启发函数，具体实现注册在 PuzzleBoard 中。
      *
-     * @param type 启发函数的类型
-     * @return 对应的启发函数；未知类型返回 null
+     * @param type 启发函数类型
+     * @return 对应的启发函数，未注册时返回 null
      */
     @Override
     public Predictor getPredictor(HeuristicType type) {

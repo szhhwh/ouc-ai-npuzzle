@@ -7,13 +7,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
-/** 虽然性能不高，但可以用于求解所有问题。 请同学们参照编写自己的Frontier类。 */
+/** 用有序列表实现的 Frontier。查找和插入都要线性扫描，性能不高，但可用于所有问题 */
 public class ListFrontier extends ArrayList<Node> implements Frontier {
-    // 节点优先级比较器，在Node类中定义了三个不同的比较器（
-    //      Dijkstra,
-    //      Greedy Best-First,
-    //      Best-First
-    // evaluator决定了优先取出Frontier中的哪个元素。
+    // 结点比较器，决定优先取出哪个元素
     private final Comparator<Node> evaluator;
 
     public ListFrontier(Comparator<Node> evaluator) {
@@ -26,8 +22,8 @@ public class ListFrontier extends ArrayList<Node> implements Frontier {
     }
 
     /**
-     * @param node
-     * @return
+     * @param node 待查找的结点
+     * @return 存在状态相同的结点时返回 true
      */
     @Override
     public boolean contains(Node node) {
@@ -35,38 +31,37 @@ public class ListFrontier extends ArrayList<Node> implements Frontier {
     }
 
     /**
-     * 将结点node插入到优先队列中， 如果Frontier中已经存在与node状态相同的结点，则舍弃掉二者中估值更大的结点
+     * 插入结点。若已存在状态相同的结点，则保留估值较小的那个。
      *
-     * @param node 要插入优先队列的结点
-     * @return
+     * @param node 待插入的结点
+     * @return 插入成功返回 true，被已有的更优结点取代时返回 false
      */
     @Override
     public boolean offer(Node node) {
         Node oldNode = getNode(node.getState());
-        if (oldNode == null) { // frontier中未找到与node状态相同的节点
-            // 按照f值排序时，node应该在的位置
+        if (oldNode == null) {
+            // 按估值升序插入到应有的位置
             super.add(getIndex(node), node);
             return true;
-        } else { // node是重复访问的节点
+        } else {
             return discardOrReplace(oldNode, node);
         }
     }
 
     /**
-     * 如果Frontier中已经存在与node状态相同的结点， 则舍弃掉二者之间不好的那一个。
+     * 新旧结点状态相同时，保留估值较小的那个。
      *
-     * @param oldNode
-     * @param node 结点，其状态要么已经出现在Explored中，要么已经出现在Frontier中
-     * @return true: replaced; false: discarded
+     * @param oldNode 已在队列中的结点
+     * @param node 新生成的结点
+     * @return 用新结点替换旧结点时返回 true，舍弃新结点时返回 false
      */
     private boolean discardOrReplace(Node oldNode, Node node) {
-        // 如果旧结点的估值比新的大，即新生成的结点更好
+        // 旧结点估值更大时用新结点替换
         if (evaluator.compare(oldNode, node) > 0) {
-            // 用新节点替换旧节点
             replace(oldNode, node);
             return true;
         }
-        return false; // discard，扔掉新结点
+        return false;
     }
 
     private Node getNode(State state) {
@@ -85,7 +80,7 @@ public class ListFrontier extends ArrayList<Node> implements Frontier {
     }
 
     /**
-     * 用节点 e 替换掉具有相同状态的旧节点 oldNode 同学们可能需要改写这个函数！
+     * 用新结点替换状态相同的旧结点。
      *
      * @param oldNode 被替换的结点
      * @param newNode 新结点
@@ -95,7 +90,7 @@ public class ListFrontier extends ArrayList<Node> implements Frontier {
         super.add(getIndex(newNode), newNode);
     }
 
-    /** ArrayList.equals 只比较元素序列，会忽略 evaluator； 重写以将 evaluator 纳入相等性判断，维持 equals/hashCode 契约。 */
+    /** ArrayList 的 equals 只比较元素序列，这里把 evaluator 也纳入比较 */
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;

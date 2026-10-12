@@ -9,7 +9,7 @@ import java.util.Deque;
 /** 寻路问题 */
 public class PathFinding extends Problem {
 
-    // 地图信息
+    // 地图
     GridType[][] grids;
 
     public PathFinding(State initialState, State goal) {
@@ -28,9 +28,9 @@ public class PathFinding extends Problem {
     }
 
     /**
-     * 当前问题是否有解 因为只有通过搜索来判断，所以先默认为true
+     * 寻路问题是否有解。只有搜索才能判断，这里固定返回 true。
      *
-     * @return 有解，true; 无解，false
+     * @return 恒为 true
      */
     @Override
     public boolean solvable() {
@@ -38,11 +38,11 @@ public class PathFinding extends Problem {
     }
 
     /**
-     * 草地和平地的耗散值不同
+     * 计算一步移动的代价，草地和平地的代价不同。
      *
      * @param state 当前状态
-     * @param action 进入当前状态所采取的Action
-     * @return 考虑地面状况的耗散值
+     * @param action 进入当前状态所用的动作
+     * @return 考虑地面类型后的代价
      */
     @Override
     public int stepCost(State state, Action action) {
@@ -65,9 +65,8 @@ public class PathFinding extends Problem {
 
     @Override
     public void showSolution(Deque<Node> path) {
-        // 打印寻路问题。
         System.out.println(initialState + "→" + goal);
-        // 将地图转换为字符数组 1->#; 2->*
+        // 把地图转成字符数组
         char[][] grids = new char[size][];
         for (int i = 0; i < size; i++) {
             grids[i] = new char[size];
@@ -76,16 +75,15 @@ public class PathFinding extends Problem {
             }
         }
 
-        // 标记起点
+        // 标出起点和终点
         int row = ((Position) initialState).getRow();
         int col = ((Position) initialState).getCol();
         grids[row - 1][col - 1] = '@';
-        // 和终点
         row = ((Position) goal).getRow();
         col = ((Position) goal).getCol();
         grids[row - 1][col - 1] = '√';
 
-        // 将解路径中的动作符号写入字符数组grids
+        // 把解路径上的方向符号写进字符数组
         for (Node node : path) {
             Position p = (Position) node.getParent().getState();
             Move move = (Move) node.getAction();
@@ -93,7 +91,6 @@ public class PathFinding extends Problem {
             grids[p.getRow() - 1][p.getCol() - 1] = d.symbol();
         }
 
-        // 打印字符数组
         drawGrid(grids);
     }
 

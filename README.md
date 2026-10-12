@@ -44,18 +44,17 @@ javac -version
 ```text
 .
 ├── resources/              课程测试数据
-├── scripts/                统一编译、运行和测试入口
+├── scripts/                统一编译和运行入口
 ├── src/
 │   ├── core/               课程搜索框架
 │   └── stud/               学生实现
 │       └── g01/           本小组的 N-Puzzle 实现
-├── test/                   无第三方依赖的回归测试
 └── out/                    本地编译产物，不提交
 ```
 
-## 编译与测试
+## 编译
 
-完整质量门（编译、格式检查、静态分析和回归测试）：
+完整质量门（编译、格式检查和静态分析）：
 
 ```bash
 ./mvnw -B -ntp verify
@@ -67,19 +66,15 @@ javac -version
 ./mvnw spotless:apply
 ```
 
-也可使用仓库中的辅助脚本（可以从任意目录调用）：
-
-```bash
-./scripts/compile.sh
-./scripts/test.sh
-```
+也可从任意目录调用 `./scripts/compile.sh` 完成编译。
 
 ## 运行
 
 首先运行框架自带的寻路问题，确认 Java 环境和搜索框架正常：
 
 ```bash
-./scripts/run-pathfinding.sh
+java -cp out core.runner.SearchTester \
+  resources/pathfinding.txt PATHFINDING 1 stud.runner.WalkerFeeder
 ```
 
 运行 N-Puzzle 第一阶段：
@@ -117,7 +112,7 @@ n  <n*n 个初始状态数字>  <n*n 个目标状态数字>
 
 - 不修改 `Problem`、`State`、`Action` 等课程类的公共接口。
 - 从最新 `main` 创建功能分支，不直接在 `main` 开发。
-- 提交前至少运行 `./scripts/test.sh` 和 `./scripts/run-pathfinding.sh`。
+- 提交前至少运行 `./mvnw -B -ntp verify`。
 - 不提交 `out/`、`result/`、`.idea/`、`.DS_Store` 或其他本地产物。
 - 启发函数和可解性判断必须支持输入中给定的任意目标状态。
 
