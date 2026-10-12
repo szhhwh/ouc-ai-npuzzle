@@ -5,63 +5,51 @@ import core.solver.algorithm.heuristic.Predictor;
 import core.solver.algorithm.searcher.AbstractSearcher;
 import core.solver.queue.Frontier;
 import core.solver.queue.Node;
-import stud.solver.IdAStar;
-
 import java.util.Arrays;
 import java.util.Deque;
+import stud.solver.IdAStar;
 
 /**
- * N-Puzzle 专用的优化 IDA*：在标准 IDA*（{@link IdAStar}）的算法骨架上，利用可加 PDB
- * 与盘面移动的组合结构性质，把每个结点的处理成本降到 O(1)（乘积编码）或 O(k)
- * （ranked 编码），并跳过由解长奇偶性判定注定无解的迭代轮。最优性、结点序与
- * 计数口径均与 {@link IdAStar} 完全一致。
+ * N-Puzzle 专用的优化 IDA*：在标准 IDA*（{@link IdAStar}）的算法骨架上，利用可加 PDB 与盘面移动的组合结构性质，把每个结点的处理成本降到
+ * O(1)（乘积编码）或 O(k) （ranked 编码），并跳过由解长奇偶性判定注定无解的迭代轮。最优性、结点序与 计数口径均与 {@link IdAStar} 完全一致。
  *
- * <p>【性质一：启发值的增量维护】</p>
- * <p>一次真实移动 = 空格与某个将牌 v 交换。对 v 所属组 G，这是抽象空间中一条
- * 1 代价边，表值至多变化 1；对<b>所有其它组</b>，这只是"空格与无关将牌交换"——
- * 一条 0 代价边，0-1 BFS 语义下两抽象状态距离相等，<b>表值严格不变</b>
- * （DisjointPdbHeuristic【一致性】论证的直接推论）。因此子结点 h =
- * 父 h − table_G[旧] + table_G[新]，无需全盘重扫，两版后端分别为：</p>
+ * <p>【性质一：启发值的增量维护】
+ *
+ * <p>一次真实移动 = 空格与某个将牌 v 交换。对 v 所属组 G，这是抽象空间中一条 1 代价边，表值至多变化 1；对<b>所有其它组</b>，这只是"空格与无关将牌交换"—— 一条 0
+ * 代价边，0-1 BFS 语义下两抽象状态距离相等，<b>表值严格不变</b> （DisjointPdbHeuristic【一致性】论证的直接推论）。因此子结点 h = 父 h −
+ * table_G[旧] + table_G[新]，无需全盘重扫，两版后端分别为：
+ *
  * <ul>
- *   <li><b>乘积编码</b>（3 阶 3-3-2）：组编码含空格最低维，被动组用位权增量
- *       {@code idx' = idx + (b−t)·(w_j−1)}（与建表 0-1 BFS 同一条公式），
- *       其余组仅平移空格维——1 次算术 + 1 次表访问/步；</li>
- *   <li><b>ranked 编码</b>（4 阶 7-7-1）：被动组的 tuple 排名 R 需 O(k) 的
- *       Lehmer 区间传播，非被动组的空格序 q 由组内将牌位置位图 popcount 得
- *       O(1)（位图本身每步 O(1) 更新）。</li>
+ *   <li><b>乘积编码</b>（3 阶 3-3-2）：组编码含空格最低维，被动组用位权增量 {@code idx' = idx + (b−t)·(w_j−1)}（与建表 0-1 BFS
+ *       同一条公式）， 其余组仅平移空格维——1 次算术 + 1 次表访问/步；
+ *   <li><b>ranked 编码</b>（4 阶 7-7-1）：被动组的 tuple 排名 R 需 O(k) 的 Lehmer 区间传播，非被动组的空格序 q 由组内将牌位置位图
+ *       popcount 得 O(1)（位图本身每步 O(1) 更新）。
  * </ul>
- * <p>对称增强态 T(s)（转置 τ + 值置换 π 的复合）中被移动的将牌是 π(v)，位置由
- * τ(t) 移到 τ(b)：对称盘面与对称编码同样逐步增量。两条链各维护标量
- * h<sub>D</sub>、h<sub>S</sub>，结点启发值 = max(h<sub>D</sub>, h<sub>S</sub>)
- * ——与全量查询 hMax 数值恒等，仅计算方式不同（等价性证据：两版在全实例上的
- * 结点数逐位一致，见 docs/optimization-proof.md §5）。</p>
  *
- * <p>【性质二：解长奇偶对齐的界限跳轮】</p>
- * <p>把空格视作最小值 0，对<b>含空格</b>的行主序序列数逆序数 ψ。水平移动交换相邻
- * 两项（ψ ±1）；垂直移动使被换将牌跨越 size−1 项（ψ 变化 ±(2k+1)）——每步移动 ψ
- * 的奇偶必翻转。d 步解路径共翻转 d 次，故 <b>解长 d ≡ ψ(initial) ⊕ ψ(goal) (mod 2)</b>，
- * 求解前即可确定。IDA* 的迭代界限若与该奇偶不符，本轮必无解（目标的 f = 解长）：
- * 初始 bound 与 nextBound 奇偶不符时直接 +1。被跳过的轮不会漏解——下一轮搜索的
- * 结点集合是其超集；而照常执行该轮也只会以 nextBound = bound+1 告终，整轮 DFS
- * 开销被完全节省。</p>
+ * <p>对称增强态 T(s)（转置 τ + 值置换 π 的复合）中被移动的将牌是 π(v)，位置由 τ(t) 移到 τ(b)：对称盘面与对称编码同样逐步增量。两条链各维护标量
+ * h<sub>D</sub>、h<sub>S</sub>，结点启发值 = max(h<sub>D</sub>, h<sub>S</sub>) ——与全量查询 hMax
+ * 数值恒等，仅计算方式不同（等价性证据：两版在全实例上的 结点数逐位一致，见 docs/optimization-proof.md §5）。
  *
- * <p>【性质三：h<sub>D</sub> = 0 ⟺ 目标】</p>
- * <p>多源起点建表使组表值为 0 ⟺ 组内将牌全部就位（空格在任意剩余格）。全部组
- * 同时为 0 ⟺ 所有将牌就位 ⟺ 空格被挤到唯一剩余格即 goal 空格位。故 h<sub>D</sub>=0
- * 与 {@code problem.goal(state)} 等价，目标判定退化为一次 int 比较。</p>
+ * <p>【性质二：解长奇偶对齐的界限跳轮】
  *
- * <p>【与通用 IdAStar 的一致性】子结点按 UP、DOWN、LEFT、RIGHT 固定方向序枚举
- * （与 {@code PuzzleBoard.actions()} 一致），f 相同时保持该序（稳定插入排序）；
- * 排序键 f = g+1+max(h<sub>D</sub>,h<sub>S</sub>) 与通用版 child.evaluation() 数值相同。
- * 因此两版搜索树逐结点重合，nodesGenerated / nodesExpanded <b>逐位一致</b>——
- * 这本身就是等价性的实验验证手段（3 阶乘积后端已全实例逐位验证；ranked 后端
- * 经表值交叉验证 + 增量/全量结点数逐位对比）。计数、剪枝、目标判定与 nextBound 语义均与
- * 通用版相同（先剪枝后判目标，f &gt; bound 的目标计入 nextBound 而非提前返回，
- * 杜绝次优解）；奇偶跳轮由性质二保证完备性。</p>
+ * <p>把空格视作最小值 0，对<b>含空格</b>的行主序序列数逆序数 ψ。水平移动交换相邻 两项（ψ ±1）；垂直移动使被换将牌跨越 size−1 项（ψ 变化 ±(2k+1)）——每步移动
+ * ψ 的奇偶必翻转。d 步解路径共翻转 d 次，故 <b>解长 d ≡ ψ(initial) ⊕ ψ(goal) (mod 2)</b>， 求解前即可确定。IDA*
+ * 的迭代界限若与该奇偶不符，本轮必无解（目标的 f = 解长）： 初始 bound 与 nextBound 奇偶不符时直接 +1。被跳过的轮不会漏解——下一轮搜索的
+ * 结点集合是其超集；而照常执行该轮也只会以 nextBound = bound+1 告终，整轮 DFS 开销被完全节省。
  *
- * <p>【适用范围与降级】仅支持 3/4 阶 N-Puzzle（3 阶走乘积后端、4 阶走 ranked
- * 后端）；其余问题（寻路等）一律转发通用 {@link IdAStar} 并拷回计数，对外行为
- * 保持一致。PDB 表与全量查询版共享（同一份磁盘/进程内缓存）。</p>
+ * <p>【性质三：h<sub>D</sub> = 0 ⟺ 目标】
+ *
+ * <p>多源起点建表使组表值为 0 ⟺ 组内将牌全部就位（空格在任意剩余格）。全部组 同时为 0 ⟺ 所有将牌就位 ⟺ 空格被挤到唯一剩余格即 goal 空格位。故 h<sub>D</sub>=0
+ * 与 {@code problem.goal(state)} 等价，目标判定退化为一次 int 比较。
+ *
+ * <p>【与通用 IdAStar 的一致性】子结点按 UP、DOWN、LEFT、RIGHT 固定方向序枚举 （与 {@code PuzzleBoard.actions()} 一致），f
+ * 相同时保持该序（稳定插入排序）； 排序键 f = g+1+max(h<sub>D</sub>,h<sub>S</sub>) 与通用版 child.evaluation() 数值相同。
+ * 因此两版搜索树逐结点重合，nodesGenerated / nodesExpanded <b>逐位一致</b>—— 这本身就是等价性的实验验证手段（3 阶乘积后端已全实例逐位验证；ranked
+ * 后端 经表值交叉验证 + 增量/全量结点数逐位对比）。计数、剪枝、目标判定与 nextBound 语义均与 通用版相同（先剪枝后判目标，f &gt; bound 的目标计入 nextBound
+ * 而非提前返回， 杜绝次优解）；奇偶跳轮由性质二保证完备性。
+ *
+ * <p>【适用范围与降级】仅支持 3/4 阶 N-Puzzle（3 阶走乘积后端、4 阶走 ranked 后端）；其余问题（寻路等）一律转发通用 {@link IdAStar}
+ * 并拷回计数，对外行为 保持一致。PDB 表与全量查询版共享（同一份磁盘/进程内缓存）。
  */
 public final class NPuzzleIdaStar extends AbstractSearcher {
 
@@ -75,7 +63,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     private final Predictor predictor;
 
     /**
-     * @param frontier  仅为兼容 {@code EngineFeeder} 统一构造方式的占位（IDA* 不需要）
+     * @param frontier 仅为兼容 {@code EngineFeeder} 统一构造方式的占位（IDA* 不需要）
      * @param predictor 降级路径的启发函数
      */
     public NPuzzleIdaStar(Frontier frontier, Predictor predictor) {
@@ -84,8 +72,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     }
 
     /**
-     * 求解入口：3/4 阶 N-Puzzle 走增量 PDB 的专用 IDA*（4 阶 ranked 7-7-1、
-     * 3 阶乘积 3-3-2），其余问题降级转发通用 IdAStar。
+     * 求解入口：3/4 阶 N-Puzzle 走增量 PDB 的专用 IDA*（4 阶 ranked 7-7-1、 3 阶乘积 3-3-2），其余问题降级转发通用 IdAStar。
      *
      * @param problem 待求解问题
      * @return 解路径（不含根结点）；无解返回 null；初始即目标返回空路径
@@ -95,10 +82,16 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         if (problem instanceof NPuzzleProblem) {
             PuzzleBoard initial = (PuzzleBoard) problem.root().getState();
             if (initial.size() == 4) {
-                return searchSpecialized(problem, initial, new RankedCtx(initial, ((NPuzzleProblem) problem).goalBoard()));
+                return searchSpecialized(
+                        problem,
+                        initial,
+                        new RankedCtx(initial, ((NPuzzleProblem) problem).goalBoard()));
             }
             if (initial.size() == 3) {
-                return searchSpecialized(problem, initial, new ProdCtx(initial, ((NPuzzleProblem) problem).goalBoard()));
+                return searchSpecialized(
+                        problem,
+                        initial,
+                        new ProdCtx(initial, ((NPuzzleProblem) problem).goalBoard()));
             }
         }
         return searchGeneric(problem);
@@ -127,14 +120,13 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         nodesGenerated = ctx.gen;
         nodesExpanded = ctx.exp;
         if (ctx.foundMoves == null) {
-            return null;   //可解却穷尽：仅当启发异常（理论上不可达）
+            return null; // 可解却穷尽：仅当启发异常（理论上不可达）
         }
         return buildPath(problem, initial, ctx.foundMoves);
     }
 
     /**
-     * 把记录的移动序列（每步空格的目标格下标）重放为框架的 Node 父指针链，
-     * 复用 {@link AbstractSearcher#generatePath} 构造解路径。
+     * 把记录的移动序列（每步空格的目标格下标）重放为框架的 Node 父指针链， 复用 {@link AbstractSearcher#generatePath} 构造解路径。
      * 重放只发生在求解成功之后，O(d) 一次性构造，不参与搜索热路径。
      */
     private Deque<Node> buildPath(Problem problem, PuzzleBoard initial, int[] foundMoves) {
@@ -164,9 +156,8 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     // ==================================================================
 
     /**
-     * 一次专用搜索的全部共享状态：盘面就地修改（apply/undo 维护），路径环检测
-     * 用 long 键哈希集合，子结点缓冲预分配——搜索热路径零分配。
-     * 编码相关的 h 维护由子类实现（乘积 / ranked 两个后端）。
+     * 一次专用搜索的全部共享状态：盘面就地修改（apply/undo 维护），路径环检测 用 long 键哈希集合，子结点缓冲预分配——搜索热路径零分配。 编码相关的 h 维护由子类实现（乘积
+     * / ranked 两个后端）。
      */
     private abstract static class SearchCtx {
 
@@ -209,7 +200,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             for (int i = 0; i < cells; i++) {
                 code = (code << 4) | board[i];
             }
-            //子类构造体完成启发初始化（hD/hS/symmetric/编码状态）后再 run()
+            // 子类构造体完成启发初始化（hD/hS/symmetric/编码状态）后再 run()
         }
 
         /** 当前结点的启发值 max(h_D, h_S) */
@@ -221,16 +212,12 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         abstract int fChild(int depth, int t);
 
         /**
-         * 应用一次移动：空格移到 t（将牌 board[t] 移到当前空格位），
-         * 就地更新盘面、编码状态、h_D/h_S 与 64bit 编码。
-         * 逆移动 = apply(旧空格位)：同一条公式的对称形态，无需单独实现。
+         * 应用一次移动：空格移到 t（将牌 board[t] 移到当前空格位）， 就地更新盘面、编码状态、h_D/h_S 与 64bit 编码。 逆移动 =
+         * apply(旧空格位)：同一条公式的对称形态，无需单独实现。
          */
         abstract void apply(int t);
 
-        /**
-         * 奇偶对齐的迭代加深主体。返回时 foundMoves 非 null 即找到最优解
-         * （空数组表示初始即目标）。
-         */
+        /** 奇偶对齐的迭代加深主体。返回时 foundMoves 非 null 即找到最优解 （空数组表示初始即目标）。 */
         final void run() {
             int parity = psi(board) ^ psi(goalCells);
             int h0 = hMax();
@@ -240,7 +227,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             while (foundMoves == null) {
                 int nextBound = dfs(0, bound);
                 if (nextBound == INFINITY) {
-                    return;   //树被穷尽而无目标：不可解（可解性已检，理论不可达）
+                    return; // 树被穷尽而无目标：不可解（可解性已检，理论不可达）
                 }
                 // 奇偶不符的界限层不存在解（目标的 f ≡ parity），直接抬到下一个同奇偶层
                 bound = ((nextBound ^ parity) & 1) != 0 ? nextBound + 1 : nextBound;
@@ -248,8 +235,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         }
 
         /**
-         * 深度优先一轮：进入时 board/编码/h_D/h_S/code 已是当前结点状态。
-         * 语义与通用 IdAStar.dfs 逐条对齐（先剪枝、再判目标、后扩展、
+         * 深度优先一轮：进入时 board/编码/h_D/h_S/code 已是当前结点状态。 语义与通用 IdAStar.dfs 逐条对齐（先剪枝、再判目标、后扩展、
          * 环检测只作用于当前路径、子结点按 f 稳定升序深入）。
          */
         private final int dfs(int depth, int bound) {
@@ -257,7 +243,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             if (f > bound) {
                 return f;
             }
-            if (hD == 0) {   //性质三：h_D=0 ⟺ 目标
+            if (hD == 0) { // 性质三：h_D=0 ⟺ 目标
                 foundMoves = Arrays.copyOf(moves, depth);
                 return INFINITY;
             }
@@ -293,25 +279,24 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 int from = blank;
                 // 环检测在应用移动前完成：用编码增量直接构造子结点键，
                 // 命中（路径内重复状态）者跳过，免去一次 apply/undo 往返
-                long childCode = code
-                        + ((long) board[t] << shift[from])
-                        - ((long) board[t] << shift[t]);
+                long childCode =
+                        code + ((long) board[t] << shift[from]) - ((long) board[t] << shift[t]);
                 if (pathSet.contains(childCode)) {
                     continue;
                 }
                 apply(t);
                 moves[depth] = t;
                 int r = dfs(depth + 1, bound);
-                apply(from);   //撤销：空格移回 from，盘面/编码/h 全部复原（公式自对称）
+                apply(from); // 撤销：空格移回 from，盘面/编码/h 全部复原（公式自对称）
                 if (foundMoves != null) {
-                    return INFINITY;   //已找到目标：nextBound 无意义，层层快速返回
+                    return INFINITY; // 已找到目标：nextBound 无意义，层层快速返回
                 }
                 if (r < min) {
                     min = r;
                 }
             }
 
-            pathSet.remove(code);   //回溯：离开当前路径
+            pathSet.remove(code); // 回溯：离开当前路径
             return min;
         }
 
@@ -348,10 +333,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     //  乘积编码后端（3 阶 3-3-2，表来自 DisjointPdbHeuristic）
     // ==================================================================
 
-    /**
-     * 乘积进制编码的增量维护：被动组位权增量，其余组平移空格最低维。
-     * 适用于编码空间小的规模（3 阶 9⁴ 项/组），O(1)/步。
-     */
+    /** 乘积进制编码的增量维护：被动组位权增量，其余组平移空格最低维。 适用于编码空间小的规模（3 阶 9⁴ 项/组），O(1)/步。 */
     private static final class ProdCtx extends SearchCtx {
 
         private final DisjointPdbHeuristic.Tables tbl;
@@ -503,13 +485,13 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
     /**
      * ranked（部分排列排名）编码的增量维护（4 阶 7-7-1 大组 PDB）：
+     *
      * <ul>
-     *   <li>被动组：tuple 排名 R 的 O(k) Lehmer 区间传播
-     *       （Aᵢ 对 pⱼ 跨越 (t,b) 区间者的 ±1，Aⱼ 的重算）+ 空格序 q 的
-     *       位图 popcount；</li>
-     *   <li>非被动组：表值不变，tuple 不变，仅 q 平移（位图 popcount，O(1)）；</li>
-     *   <li>组内将牌位置位图 mask 每步 O(1) 更新，供 q 的 O(1) 计算；</li>
-     *   <li>对称链同构（被移动将牌 π(v)：τ(t)→τ(b)）。</li>
+     *   <li>被动组：tuple 排名 R 的 O(k) Lehmer 区间传播 （Aᵢ 对 pⱼ 跨越 (t,b) 区间者的 ±1，Aⱼ 的重算）+ 空格序 q 的 位图
+     *       popcount；
+     *   <li>非被动组：表值不变，tuple 不变，仅 q 平移（位图 popcount，O(1)）；
+     *   <li>组内将牌位置位图 mask 每步 O(1) 更新，供 q 的 O(1) 计算；
+     *   <li>对称链同构（被移动将牌 π(v)：τ(t)→τ(b)）。
      * </ul>
      */
     private static final class RankedCtx extends SearchCtx {
@@ -557,11 +539,6 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             maskG = new int[gn];
             maskS = new int[gn];
 
-            // π⁻¹（对称链的初始编码用）
-            int[] inv = new int[cells];
-            for (int v = 0; v < cells; v++) {
-                inv[symPerm[v]] = v;
-            }
             symmetric = tbl.symmetric;
             symBoard = new byte[cells];
             if (symmetric) {
@@ -603,12 +580,11 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         }
 
         /**
-         * 被动组新 (R, q) 的 O(k) 计算：tuple 排名增量 = Aⱼ 变化 + pᵢ (i&gt;j)
-         * 落入 (t,b) 区间者的 ±位权；q_new 由新位图 popcount。
-         * 返回 pack(newR, newQ)。
+         * 被动组新 (R, q) 的 O(k) 计算：tuple 排名增量 = Aⱼ 变化 + pᵢ (i&gt;j) 落入 (t,b) 区间者的 ±位权；q_new 由新位图
+         * popcount。 返回 pack(newR, newQ)。
          */
-        private long passiveDelta(int[] posArr, int[] rArr, int[] maskArr,
-                                  int g, int j, int t, int b) {
+        private long passiveDelta(
+                int[] posArr, int[] rArr, int[] maskArr, int g, int j, int t, int b) {
             int k = tilesOf[g].length;
             int[] tiles = tilesOf[g];
             int[][] permW = tbl.perm;
@@ -640,16 +616,20 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             int g = tileGroup[v], j = tileSlot[v];
 
             long nd = passiveDelta(pos, rG, maskG, g, j, t, b);
-            int hv = hD + (tbl.tables[g][(int) (nd & 63)][(int) (nd >>> 6)] & 0xFF)
-                    - (tbl.tables[g][qG[g]][rG[g]] & 0xFF);
+            int hv =
+                    hD
+                            + (tbl.tables[g][(int) (nd & 63)][(int) (nd >>> 6)] & 0xFF)
+                            - (tbl.tables[g][qG[g]][rG[g]] & 0xFF);
 
             if (symmetric) {
                 int sv = symPerm[v];
                 int gs = tileGroup[sv], js = tileSlot[sv];
                 int tb = transpose[b], tt = transpose[t];
                 long ns = passiveDelta(posSym, rS, maskS, gs, js, tt, tb);
-                int hs2 = hS + (tbl.tables[gs][(int) (ns & 63)][(int) (ns >>> 6)] & 0xFF)
-                        - (tbl.tables[gs][qS[gs]][rS[gs]] & 0xFF);
+                int hs2 =
+                        hS
+                                + (tbl.tables[gs][(int) (ns & 63)][(int) (ns >>> 6)] & 0xFF)
+                                - (tbl.tables[gs][qS[gs]][rS[gs]] & 0xFF);
                 if (hs2 > hv) {
                     hv = hs2;
                 }
@@ -720,7 +700,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         private int freeTop;
         private final int shift;
 
-        LongHashSet(int capacity) {   //capacity 须为 2 的幂
+        LongHashSet(int capacity) { // capacity 须为 2 的幂
             int bits = Integer.numberOfTrailingZeros(capacity);
             shift = 64 - bits;
             keys = new long[capacity];

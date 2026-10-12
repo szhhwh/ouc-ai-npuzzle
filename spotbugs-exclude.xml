@@ -9,4 +9,9 @@
     <Bug pattern="NP_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD">
         <Class name="stud.problem.pathfinding.PathFinding"/>
     </Bug>
+    <!-- cells() 有意返回内部引用（热路径零拷贝），契约：调用方不得修改；设计决策，排除 -->
+    <Bug pattern="EI_EXPOSE_REP">
+        <Class name="stud.g01.problem.npuzzle.PuzzleBoard"/>
+        <Method name="cells"/>
+    </Bug>
 </FindBugsFilter>

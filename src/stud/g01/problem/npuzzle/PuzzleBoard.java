@@ -1,53 +1,50 @@
 package stud.g01.problem.npuzzle;
 
-import core.problem.Action;
-import core.problem.State;
-import core.solver.algorithm.heuristic.HeuristicType;
-import core.solver.algorithm.heuristic.Predictor;
-
-import java.util.Arrays;
-import java.util.EnumMap;
-import java.util.List;
-
 import static core.solver.algorithm.heuristic.HeuristicType.DISJOINT_PATTERN;
 import static core.solver.algorithm.heuristic.HeuristicType.MANHATTAN;
 import static core.solver.algorithm.heuristic.HeuristicType.MISPLACED;
 
+import core.problem.Action;
+import core.problem.State;
+import core.solver.algorithm.heuristic.HeuristicType;
+import core.solver.algorithm.heuristic.Predictor;
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.List;
+
 /**
  * N-Puzzle 的盘面状态。
  *
- * 盘面是不可变对象：cells 为行主序的一维数组，0 表示空格；
- * 任何移动（{@link #next}）都返回新的 PuzzleBoard，而不修改当前对象。
+ * <p>盘面是不可变对象：cells 为行主序的一维数组，0 表示空格； 任何移动（{@link #next}）都返回新的 PuzzleBoard，而不修改当前对象。
  * 空格的线性下标与哈希值在构造时一次性计算并缓存。
  */
 public class PuzzleBoard extends State {
 
-    //行主序的盘面数组，0 表示空格
+    // 行主序的盘面数组，0 表示空格
     private final byte[] cells;
-    //盘面的边长
+    // 盘面的边长
     private final int size;
-    //缓存的空格线性下标
+    // 缓存的空格线性下标
     private final int blank;
-    //64bit 盘面编码缓存：每格数字占 4 个 bit（首格在最高位），
-    //4 阶 16 格正好占满一个 long；3 阶只占用低 36 个 bit。
-    //增量构造（next）时避免全盘重扫，必须保留折叠成 int 之前的原始编码。
+    // 64bit 盘面编码缓存：每格数字占 4 个 bit（首格在最高位），
+    // 4 阶 16 格正好占满一个 long；3 阶只占用低 36 个 bit。
+    // 增量构造（next）时避免全盘重扫，必须保留折叠成 int 之前的原始编码。
     private final long code;
-    //缓存的哈希值（由 code 折叠而来）
+    // 缓存的哈希值（由 code 折叠而来）
     private final int hash;
 
     /**
      * 用行主序的盘面数组构造一个盘面状态
      *
-     * @param cells 行主序盘面数组，0 表示空格（构造时深拷贝，调用方可继续持有该数组）；
-     *              应为 0..size²−1 的排列（由问题文件的输入格式保证）
-     * @param size  盘面边长
+     * @param cells 行主序盘面数组，0 表示空格（构造时深拷贝，调用方可继续持有该数组）； 应为 0..size²−1 的排列（由问题文件的输入格式保证）
+     * @param size 盘面边长
      */
     public PuzzleBoard(byte[] cells, int size) {
         this.cells = cells.clone();
         this.size = size;
 
-        //构造时计算空格位置与编码缓存：每格数字占 4 个 bit，
-        //16 格（4×4）正好编码为一个 long；3 阶只占用低 36 个 bit。
+        // 构造时计算空格位置与编码缓存：每格数字占 4 个 bit，
+        // 16 格（4×4）正好编码为一个 long；3 阶只占用低 36 个 bit。
         long h = 0;
         int b = -1;
         for (int i = 0; i < this.cells.length; i++) {
@@ -60,8 +57,7 @@ public class PuzzleBoard extends State {
     }
 
     /**
-     * 增量构造：仅在 {@link #next} 内部使用。
-     * 调用方已持有交换后的 cells、新的空格下标与增量更新后的 64bit 编码，
+     * 增量构造：仅在 {@link #next} 内部使用。 调用方已持有交换后的 cells、新的空格下标与增量更新后的 64bit 编码，
      * 无需再全盘扫描。私有保证了所有公共入口仍走全量校验构造。
      */
     private PuzzleBoard(byte[] cells, int size, int blank, long code) {
@@ -73,10 +69,8 @@ public class PuzzleBoard extends State {
     }
 
     /**
-     * 把 64bit 盘面编码折叠为 32bit 哈希：乘法散列（Fibonacci 混合常数）。
-     * 不用简单的 {@code (int)(h ^ h>>>32)} 异或折叠——它对"位置对折"的盘面
-     * （第 i 格与对称格互换）会得到相同哈希，3 阶全部排列只覆盖一半的哈希空间；
-     * 乘以奇素数常数后高位充分混入低位，消除该对称盲区。
+     * 把 64bit 盘面编码折叠为 32bit 哈希：乘法散列（Fibonacci 混合常数）。 不用简单的 {@code (int)(h ^ h>>>32)}
+     * 异或折叠——它对"位置对折"的盘面 （第 i 格与对称格互换）会得到相同哈希，3 阶全部排列只覆盖一半的哈希空间； 乘以奇素数常数后高位充分混入低位，消除该对称盲区。
      */
     private static int fold(long code) {
         return (int) ((code * 0x9E3779B97F4A7C15L) >>> 32);
@@ -97,8 +91,7 @@ public class PuzzleBoard extends State {
     }
 
     /**
-     * 返回内部盘面数组（行主序）。
-     * 注意：为避免拷贝开销直接返回内部引用，调用方不得修改该数组！
+     * 返回内部盘面数组（行主序）。 注意：为避免拷贝开销直接返回内部引用，调用方不得修改该数组！
      *
      * @return 内部 cells 数组引用
      */
@@ -106,9 +99,7 @@ public class PuzzleBoard extends State {
         return cells;
     }
 
-    /**
-     * 在控制台上按行打印盘面，空格显示为 #
-     */
+    /** 在控制台上按行打印盘面，空格显示为 # */
     @Override
     public void draw() {
         for (int i = 0; i < cells.length; i++) {
@@ -118,38 +109,46 @@ public class PuzzleBoard extends State {
     }
 
     /**
-     * 当前盘面采用动作 action（空格朝某方向移动一格）后的后继盘面。
-     * 调用前应保证 action 是可行的（参见 NPuzzleProblem.applicable）。
+     * 当前盘面采用动作 action（空格朝某方向移动一格）后的后继盘面。 调用前应保证 action 是可行的（参见 NPuzzleProblem.applicable）。
      *
      * @param action 当前盘面上一个可行的动作
      * @return 移动空格后得到的新盘面
      */
     @Override
     public State next(Action action) {
-        //空格移动一格后所到达的线性下标
+        // 空格移动一格后所到达的线性下标
         int target;
         switch (((PuzzleMove) action).direction()) {
-            case UP:    target = blank - size; break;   //空格与上方的将牌交换
-            case DOWN:  target = blank + size; break;   //空格与下方的将牌交换
-            case LEFT:  target = blank - 1;     break;  //空格与左边的将牌交换
-            default:    target = blank + 1;     break;  //空格与右边的将牌交换
+            case UP:
+                target = blank - size;
+                break; // 空格与上方的将牌交换
+            case DOWN:
+                target = blank + size;
+                break; // 空格与下方的将牌交换
+            case LEFT:
+                target = blank - 1;
+                break; // 空格与左边的将牌交换
+            default:
+                target = blank + 1;
+                break; // 空格与右边的将牌交换
         }
 
-        //复制盘面，交换空格与目标位置的将牌（本对象保持不变）
+        // 复制盘面，交换空格与目标位置的将牌（本对象保持不变）
         byte v = cells[target];
         byte[] newCells = cells.clone();
         newCells[blank] = v;
         newCells[target] = 0;
 
-        //增量更新 64bit 编码：将牌 v（4bit）从 target 槽位搬到 blank 槽位（原为 0）。
-        //槽位 i 的 4bit 段位于第 4*(length-1-i) 位起；新空格下标即 target。
-        long newCode = code
-                + ((long) v << (4 * (cells.length - 1 - blank)))
-                - ((long) v << (4 * (cells.length - 1 - target)));
+        // 增量更新 64bit 编码：将牌 v（4bit）从 target 槽位搬到 blank 槽位（原为 0）。
+        // 槽位 i 的 4bit 段位于第 4*(length-1-i) 位起；新空格下标即 target。
+        long newCode =
+                code
+                        + ((long) v << (4 * (cells.length - 1 - blank)))
+                        - ((long) v << (4 * (cells.length - 1 - target)));
         return new PuzzleBoard(newCells, size, target, newCode);
     }
 
-    //四个方向动作的不可变复用列表，actions() 直接返回它，不做任何分配
+    // 四个方向动作的不可变复用列表，actions() 直接返回它，不做任何分配
     private static final List<PuzzleMove> ALL_MOVES =
             List.of(PuzzleMove.UP, PuzzleMove.DOWN, PuzzleMove.LEFT, PuzzleMove.RIGHT);
 
@@ -161,18 +160,18 @@ public class PuzzleBoard extends State {
         return ALL_MOVES;
     }
 
-    //枚举映射，存放不同类型的启发函数
+    // 枚举映射，存放不同类型的启发函数
     private static final EnumMap<HeuristicType, Predictor> predictors =
             new EnumMap<>(HeuristicType.class);
 
     static {
-        //不在位将牌数（不计空格）
-        predictors.put(MISPLACED,
-                (state, goal) -> ((PuzzleBoard) state).misplaced((PuzzleBoard) goal));
-        //各非空格将牌到其目标位置的曼哈顿距离之和
-        predictors.put(MANHATTAN,
-                (state, goal) -> ((PuzzleBoard) state).manhattan((PuzzleBoard) goal));
-        //可加模式数据库（6-6-3 / 3-3-2 分组 + 对称增强），第三阶段使用
+        // 不在位将牌数（不计空格）
+        predictors.put(
+                MISPLACED, (state, goal) -> ((PuzzleBoard) state).misplaced((PuzzleBoard) goal));
+        // 各非空格将牌到其目标位置的曼哈顿距离之和
+        predictors.put(
+                MANHATTAN, (state, goal) -> ((PuzzleBoard) state).manhattan((PuzzleBoard) goal));
+        // 可加模式数据库（6-6-3 / 3-3-2 分组 + 对称增强），第三阶段使用
         predictors.put(DISJOINT_PATTERN, DisjointPdbHeuristic.predictor());
     }
 
@@ -200,9 +199,9 @@ public class PuzzleBoard extends State {
         return count;
     }
 
-    //记忆化缓存：上次计算曼哈顿距离时的目标盘面与其位置表。
-    //搜索引擎单线程运行，且同一次搜索中 goal 盘面固定、被数百万次重复传入，
-    //命中时省去每次 O(n) 的 int[] 分配与重建（仅剩一次 O(n) 的逐格比较，零分配）。
+    // 记忆化缓存：上次计算曼哈顿距离时的目标盘面与其位置表。
+    // 搜索引擎单线程运行，且同一次搜索中 goal 盘面固定、被数百万次重复传入，
+    // 命中时省去每次 O(n) 的 int[] 分配与重建（仅剩一次 O(n) 的逐格比较，零分配）。
     private static byte[] lastGoalCells;
     private static int[] lastGoalPos;
 
@@ -213,9 +212,9 @@ public class PuzzleBoard extends State {
      * @return 曼哈顿距离总和
      */
     private int manhattan(PuzzleBoard goal) {
-        //pos[v]：将牌 v 在目标盘面上的线性下标；goal 未变时直接复用上次的表
+        // pos[v]：将牌 v 在目标盘面上的线性下标；goal 未变时直接复用上次的表
         if (lastGoalPos == null || !Arrays.equals(lastGoalCells, goal.cells)) {
-            lastGoalCells = goal.cells;   //goal 不可变，直接持有引用即可
+            lastGoalCells = goal.cells; // goal 不可变，直接持有引用即可
             int[] pos = new int[goal.cells.length];
             for (int i = 0; i < goal.cells.length; i++) {
                 pos[goal.cells[i]] = i;
@@ -227,16 +226,14 @@ public class PuzzleBoard extends State {
         int distance = 0;
         for (int i = 0; i < cells.length; i++) {
             byte v = cells[i];
-            if (v == 0) continue;   //空格不计入
+            if (v == 0) continue; // 空格不计入
             int j = pos[v];
             distance += Math.abs(i / size - j / size) + Math.abs(i % size - j % size);
         }
         return distance;
     }
 
-    /**
-     * 两个盘面相同 ⇔ 类型相同、边长相同且逐格相等
-     */
+    /** 两个盘面相同 ⇔ 类型相同、边长相同且逐格相等 */
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
@@ -248,17 +245,13 @@ public class PuzzleBoard extends State {
         return false;
     }
 
-    /**
-     * 返回构造时缓存的哈希值
-     */
+    /** 返回构造时缓存的哈希值 */
     @Override
     public int hashCode() {
         return hash;
     }
 
-    /**
-     * 空格分隔的行主序数字串（空格记 0），用于调试
-     */
+    /** 空格分隔的行主序数字串（空格记 0），用于调试 */
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
