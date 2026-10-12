@@ -28,7 +28,9 @@ public class PuzzleBoard extends State {
     // 盘面编码：每格数字占 4 个 bit，首格在最高位，4 阶 16 格正好占满一个 long。
     // next 增量构造新盘面时直接改这个编码，避免全盘重扫，所以必须保留成 long。
     private final long code;
-    // 由 code 折叠出的哈希值
+    // 是否可以用 code 无损表示全部格子
+    private final boolean packed;
+    // 小盘面折叠 code，大盘面使用完整数组计算哈希
     private final int hash;
 
     /**
@@ -44,22 +46,26 @@ public class PuzzleBoard extends State {
         // 一次扫描同时算出空格位置和盘面编码
         long h = 0;
         int b = -1;
+        boolean fits = this.cells.length <= Long.SIZE / 4;
         for (int i = 0; i < this.cells.length; i++) {
             h = (h << 4) | this.cells[i];
+            fits &= this.cells[i] >= 0 && this.cells[i] <= 15;
             if (this.cells[i] == 0) b = i;
         }
         this.code = h;
+        this.packed = fits;
         this.blank = b;
-        this.hash = fold(h);
+        this.hash = packed ? fold(h) : Arrays.hashCode(this.cells);
     }
 
-    /** 增量构造，仅供 {@link #next} 使用。调用方已经算好交换后的 cells、新的空格下标和增量更新后的编码，这里不再全盘扫描。 */
-    private PuzzleBoard(byte[] cells, int size, int blank, long code) {
+    /** 后继状态直接接管已复制的数组，复用编码方式和已知空格位置。 */
+    private PuzzleBoard(byte[] cells, int size, int blank, long code, boolean packed) {
         this.cells = cells;
         this.size = size;
         this.blank = blank;
         this.code = code;
-        this.hash = fold(code);
+        this.packed = packed;
+        this.hash = packed ? fold(code) : Arrays.hashCode(cells);
     }
 
     /**
@@ -132,13 +138,17 @@ public class PuzzleBoard extends State {
         newCells[blank] = v;
         newCells[target] = 0;
 
+        if (!packed) {
+            return new PuzzleBoard(newCells, size, target, 0, false);
+        }
+
         // 增量更新编码：把数字块 v 从 target 搬到 blank（原值为 0）。
         // 位置 i 的 4bit 段从第 4*(length-1-i) 位开始，新空格位置就是 target。
         long newCode =
                 code
                         + ((long) v << (4 * (cells.length - 1 - blank)))
                         - ((long) v << (4 * (cells.length - 1 - target)));
-        return new PuzzleBoard(newCells, size, target, newCode);
+        return new PuzzleBoard(newCells, size, target, newCode, true);
     }
 
     // 四个方向的动作列表，actions() 直接返回，不做分配
@@ -192,12 +202,33 @@ public class PuzzleBoard extends State {
         return count;
     }
 
-    // 缓存上一次算曼哈顿距离时用的目标盘面和它的位置表。搜索是单线程的，同一次搜索里 goal 固定但会被调用几百万次，
-    // 命中时省掉每次重建位置表。盘面与位置表打包为不可变记录、volatile 单次替换，并发下至多重复构建，不会读到撕裂的组合。
-    private static volatile GoalPosTable lastGoalTable;
+    // 缓存完整目标盘面和距离表，使用 equals 同时校验边长和全部格子。
+    // 盘面与距离表打包为不可变记录、volatile 单次替换，并发下至多重复构建，不会读到撕裂的组合。
+    private static volatile GoalDistanceTable lastGoalTable;
 
-    /** 目标盘面 cells 与其位置表（pos[v] = 数字块 v 的目标位置）的不可变配对 */
-    private record GoalPosTable(byte[] goalCells, int[] pos) {}
+    /** 目标盘面与预计算距离表（dist[i * count + v] = 位置 i 上的数字块 v 到其目标位置的曼哈顿距离）的不可变配对 */
+    private record GoalDistanceTable(PuzzleBoard goal, byte[] dist) {
+        static GoalDistanceTable build(PuzzleBoard goal) {
+            int count = goal.cells.length;
+            int size = goal.size;
+            int[] pos = new int[count];
+            for (int i = 0; i < count; i++) {
+                pos[goal.cells[i]] = i;
+            }
+            // 空格的距离保持为 0；查询时只需一次数组读取。
+            byte[] dist = new byte[count * count];
+            for (int i = 0; i < count; i++) {
+                int row = i / size;
+                int col = i % size;
+                for (int v = 1; v < count; v++) {
+                    int j = pos[v];
+                    dist[i * count + v] =
+                            (byte) (Math.abs(row - j / size) + Math.abs(col - j % size));
+                }
+            }
+            return new GoalDistanceTable(goal, dist);
+        }
+    }
 
     /**
      * 曼哈顿距离：各数字块当前位置到目标位置的行、列距离之和的总和，不计空格
@@ -206,23 +237,19 @@ public class PuzzleBoard extends State {
      * @return 曼哈顿距离总和
      */
     private int manhattan(PuzzleBoard goal) {
-        // pos[v] 是数字块 v 在目标盘面上的位置；goal 没变就直接复用上次的表
-        GoalPosTable table = lastGoalTable;
-        if (table == null || !Arrays.equals(table.goalCells(), goal.cells)) {
-            int[] pos = new int[goal.cells.length];
-            for (int i = 0; i < goal.cells.length; i++) {
-                pos[goal.cells[i]] = i;
-            }
-            lastGoalTable = table = new GoalPosTable(goal.cells, pos); // goal 不可变，直接持有引用
+        // dist[i * count + v] 是位置 i 上的数字块 v 到它目标位置的曼哈顿距离；goal 没变就直接复用上次的表
+        GoalDistanceTable table = lastGoalTable;
+        if (table == null || !table.goal().equals(goal)) {
+            table = GoalDistanceTable.build(goal);
+            lastGoalTable = table;
         }
-        int[] pos = table.pos();
+        byte[] dist = table.dist();
 
         int distance = 0;
-        for (int i = 0; i < cells.length; i++) {
+        int count = cells.length;
+        for (int i = 0; i < count; i++) {
             byte v = cells[i];
-            if (v == 0) continue;
-            int j = pos[v];
-            distance += Math.abs(i / size - j / size) + Math.abs(i % size - j % size);
+            distance += dist[i * count + v];
         }
         return distance;
     }
@@ -232,11 +259,16 @@ public class PuzzleBoard extends State {
     public boolean equals(Object obj) {
         if (this == obj) return true;
 
-        if (obj instanceof PuzzleBoard) {
-            PuzzleBoard another = (PuzzleBoard) obj;
-            return this.size == another.size && Arrays.equals(this.cells, another.cells);
+        if (!(obj instanceof PuzzleBoard another)
+                || size != another.size
+                || cells.length != another.cells.length) {
+            return false;
         }
-        return false;
+        // 只有编码无损时才能省掉逐格比较；更大的盘面必须比较完整数组。
+        if (packed && another.packed) {
+            return code == another.code;
+        }
+        return Arrays.equals(cells, another.cells);
     }
 
     /** 返回构造时算好的哈希值 */

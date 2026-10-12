@@ -11,6 +11,7 @@ import stud.queue.StackFrontier;
 import stud.solver.IdAStar;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
 /**
  * 为搜索算法提供各样素材。包括
@@ -77,5 +78,35 @@ public abstract class EngineFeeder {
         Frontier frontier = getFrontier(EvaluationType.PATH_COST);
         // predictor：h(n)≡0，即Dijkstra算法
         return new BestFirstSearcher(frontier, (state, goal) -> 0);
+    }
+
+    /**
+     * 按引擎名生成搜索引擎。
+     *
+     * @param engine 引擎名，取值 astar、ida、nida、dijkstra，大小写不敏感；其他取值按 astar 处理
+     * @param type 启发函数类型
+     * @return 搜索引擎实例
+     */
+    public final AbstractSearcher getSearcher(String engine, HeuristicType type) {
+        switch (engine.toLowerCase(Locale.ROOT)) {
+            case "ida":
+                return getIdaStar(type);
+            case "nida":
+                return getNIdaStar(type);
+            case "dijkstra":
+                return getDijkstra();
+            default:
+                return getAStar(type);
+        }
+    }
+
+    /**
+     * N-Puzzle专用IdAStar，默认退化为通用IdAStar，由需要特化加速的Feeder覆盖。
+     *
+     * @param type 可配置的启发函数类型
+     * @return N-Puzzle专用IdAStar
+     */
+    public AbstractSearcher getNIdaStar(HeuristicType type) {
+        return getIdaStar(type);
     }
 }
