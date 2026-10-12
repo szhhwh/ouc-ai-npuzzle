@@ -90,14 +90,6 @@ javac -version
 
 该脚本会使用 `resources/problems-stage1.txt` 中三个 8-Puzzle 实例，按课程入口完整运行错位将牌数和曼哈顿距离。当前实现使用带状态索引和惰性删除的 `PqFrontier`。`resources/problems.txt` 的第 4 个 15-Puzzle 实例属于后续实验阶段，不由这个脚本运行。
 
-运行第一阶段性能测试：
-
-```bash
-./scripts/benchmark-stage1.sh
-```
-
-性能脚本会先预热，再以 7 次测量的中位数作为耗时结果。增加 `--compare-list` 可在第一个实例上同时输出线性 `ListFrontier` 基线，避免三个困难实例造成过长等待。
-
 也可以在编译后直接使用课程规定的四个参数：
 
 ```bash
