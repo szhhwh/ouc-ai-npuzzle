@@ -51,6 +51,40 @@
               </arguments>
             </configuration>
           </execution>
+          <execution>
+            <id>pq-frontier-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>java</executable>
+              <arguments>
+                <argument>-ea</argument>
+                <argument>-cp</argument>
+                <argument>${project.build.outputDirectory}:${project.build.testOutputDirectory}</argument>
+                <argument>stud.queue.PqFrontierTest</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <!-- 基准同时作为最优路径长度回归（21/31/31）；只断言路径长度和结点计数，不断言毫秒数 -->
+          <execution>
+            <id>stage1-benchmark</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>java</executable>
+              <arguments>
+                <argument>-ea</argument>
+                <argument>-Dnpuzzle.stage1.file=${project.basedir}/resources/problems-stage1.txt</argument>
+                <argument>-cp</argument>
+                <argument>${project.build.outputDirectory}:${project.build.testOutputDirectory}</argument>
+                <argument>stud.g01.benchmark.Stage1PerformanceBenchmark</argument>
+              </arguments>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
 

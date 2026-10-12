@@ -13,7 +13,7 @@
 
 - JDK: Eclipse Temurin 25.0.4 LTS
 - 编码: UTF-8
-- 构建方式: `javac`，无 Maven/Gradle 和第三方依赖
+- 构建方式: Maven Wrapper（仓库锁定 Maven 版本）；测试代码无第三方依赖
 
 仓库中的 `mise.toml` 声明了统一 JDK 版本。已使用 mise 的成员可运行：
 
@@ -55,7 +55,19 @@ javac -version
 
 ## 编译与测试
 
-以下命令可以从任意目录调用：
+完整质量门（编译、格式检查、静态分析和回归测试）：
+
+```bash
+./mvnw -B -ntp verify
+```
+
+自动格式化学生代码：
+
+```bash
+./mvnw spotless:apply
+```
+
+也可使用仓库中的辅助脚本（可以从任意目录调用）：
 
 ```bash
 ./scripts/compile.sh
@@ -76,13 +88,21 @@ javac -version
 ./scripts/run-npuzzle-stage1.sh
 ```
 
-该脚本会按课程入口完整运行错位将牌数和曼哈顿距离。当前基线使用线性 `ListFrontier`，困难实例可能运行较久；后续需由 Frontier/A* 模块使用高性能数据结构达成课程时限。
+该脚本会使用 `resources/problems-stage1.txt` 中三个 8-Puzzle 实例，按课程入口完整运行错位将牌数和曼哈顿距离。当前实现使用带状态索引和惰性删除的 `PqFrontier`。`resources/problems.txt` 的第 4 个 15-Puzzle 实例属于后续实验阶段，不由这个脚本运行。
+
+运行第一阶段性能测试：
+
+```bash
+./scripts/benchmark-stage1.sh
+```
+
+性能脚本会先预热，再以 7 次测量的中位数作为耗时结果。增加 `--compare-list` 可在第一个实例上同时输出线性 `ListFrontier` 基线，避免三个困难实例造成过长等待。
 
 也可以在编译后直接使用课程规定的四个参数：
 
 ```bash
 java -cp out core.runner.SearchTester \
-  resources/problems.txt NPUZZLE 1 stud.g01.runner.PuzzleFeeder
+  resources/problems-stage1.txt NPUZZLE 1 stud.g01.runner.PuzzleFeeder
 ```
 
 四个参数依次为：问题文件、问题类型、实验阶段、`EngineFeeder` 实现类。
@@ -123,7 +143,7 @@ n  <n*n 个初始状态数字>  <n*n 个目标状态数字>
 
 待后续分工：
 
-- 高性能 `PqFrontier` 和 Open/Closed 表优化
+- 更进一步的 Open/Closed 表策略优化
 - IDA*
 - Disjoint Pattern Database
 - 正式性能实验
