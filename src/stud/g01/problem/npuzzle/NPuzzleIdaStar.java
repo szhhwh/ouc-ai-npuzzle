@@ -1,6 +1,7 @@
 package stud.g01.problem.npuzzle;
 
 import core.problem.Problem;
+import core.solver.algorithm.heuristic.HeuristicType;
 import core.solver.algorithm.heuristic.Predictor;
 import core.solver.algorithm.searcher.AbstractSearcher;
 import core.solver.queue.Frontier;
@@ -9,7 +10,7 @@ import java.util.Arrays;
 import java.util.Deque;
 import stud.solver.IdAStar;
 
-/** N-Puzzle 专用的 IDA*。3 阶和 4 阶走增量启发值的特化路径，其余问题转发给 {@link IdAStar}。 */
+/** N-Puzzle 专用的 IDA*。使用 PDB 启发函数时，3 阶和 4 阶走增量启发值的特化路径；其余情况转发给 {@link IdAStar}。 */
 public final class NPuzzleIdaStar extends AbstractSearcher {
 
     /** f 值的正无穷哨兵，dfs 返回它表示本子树没有因 f 超过界限而被剪枝的结点 */
@@ -31,14 +32,16 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     }
 
     /**
-     * 求解入口：3/4 阶 N-Puzzle 走增量 PDB 的专用 IDA*（4 阶 ranked 7-7-1、 3 阶乘积 3-3-2），其余问题降级转发通用 IdAStar。
+     * 求解入口：使用 PDB 启发函数时，3/4 阶 N-Puzzle 走增量 PDB 的专用 IDA*（4 阶 ranked 7-7-1、 3 阶乘积 3-3-2），其余情况转发通用
+     * IdAStar。
      *
      * @param problem 待求解问题
      * @return 解路径（不含根结点）；无解返回 null；初始即目标返回空路径
      */
     @Override
     public Deque<Node> search(Problem problem) {
-        if (problem instanceof NPuzzleProblem) {
+        if (predictor == PuzzleBoard.predictor(HeuristicType.DISJOINT_PATTERN)
+                && problem instanceof NPuzzleProblem) {
             PuzzleBoard initial = (PuzzleBoard) problem.root().getState();
             if (initial.size() == 4) {
                 return searchSpecialized(
