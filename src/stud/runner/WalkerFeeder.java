@@ -13,58 +13,52 @@ import stud.problem.pathfinding.PathFinding;
 import stud.problem.pathfinding.Position;
 import stud.queue.ListFrontier;
 
-/** 寻路问题的EngineFeeder，起名为WalkerFeeder 同学们可以参考编写自己的PuzzleFeeder */
+/** 寻路问题的 EngineFeeder。 */
 public class WalkerFeeder extends EngineFeeder {
     @Override
     public ArrayList<Problem> getProblems(ArrayList<String> problemLines) {
-        // 问题规模, 输入的第一行
+        // 第一行是地图规模
         int size = Integer.parseInt(problemLines.get(0));
-        // 读入地图，size * size的Grid，从第2行开始的size行数据，每行有size个数字
         GridType[][] map = getMap(problemLines, size);
 
-        /* 读入各个问题 */
         ArrayList<Problem> problems = new ArrayList<>();
         int lineNo = size + 1;
         while (lineNo < problemLines.size()) {
-            // 读入问题实例
             PathFinding problem = getPathFinding(problemLines.get(lineNo), size);
-            // 为每个问题实例设置地图
             problem.setGrids(map);
-            // 添加到问题列表
             problems.add(problem);
             lineNo++;
-        } // 读入问题结束
+        }
 
         return problems;
     }
 
     /**
-     * 生成寻路问题的一个实例
+     * 解析一行输入，生成一个寻路问题实例。
      *
-     * @param problemLine
-     * @param size
-     * @return
+     * @param problemLine 问题所在的行
+     * @param size 地图规模
+     * @return 寻路问题实例
      */
     private PathFinding getPathFinding(String problemLine, int size) {
         String[] cells = problemLine.split(" ");
-        // 读入初始状态
+        // 前两个数是起点，后两个数是终点
         int row = Integer.parseInt(cells[0]);
         int col = Integer.parseInt(cells[1]);
         Position initialState = new Position(row, col);
-        // 读入目标状态
-        // 读入初始状态
         row = Integer.parseInt(cells[2]);
         col = Integer.parseInt(cells[3]);
         Position goal = new Position(row, col);
 
-        // 生成寻路问题的实例
         return new PathFinding(initialState, goal, size);
     }
 
     /**
-     * @param problemLines
-     * @param size
-     * @return
+     * 解析输入中的地图部分。
+     *
+     * @param problemLines 输入文本的所有行
+     * @param size 地图规模
+     * @return 地图
      */
     private GridType[][] getMap(ArrayList<String> problemLines, int size) {
         GridType[][] map = new GridType[size][];
@@ -85,10 +79,10 @@ public class WalkerFeeder extends EngineFeeder {
     }
 
     /**
-     * 获得对状态进行估值的Predictor
+     * 按类型取启发函数。
      *
-     * @param type 估值函数的类型
-     * @return 估值函数
+     * @param type 启发函数类型
+     * @return 启发函数
      */
     @Override
     public Predictor getPredictor(HeuristicType type) {

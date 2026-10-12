@@ -3,11 +3,9 @@ package stud.g01.problem.npuzzle;
 import core.problem.Action;
 
 /**
- * N-Puzzle 的移动动作。
+ * N-Puzzle 的移动动作，表示空格（0）朝某个方向移动一格，即与该方向相邻的数字块交换位置。 例如 UP 表示空格与其正上方的数字块互换。
  *
- * <p>语义：空格（0）朝 direction 方向移动一格，即与该方向上相邻的将牌交换位置。 例如 UP 表示空格与其正上方的将牌互换。
- *
- * <p>四个方向各提供一个不可变单例常量，避免 {@code actions()} 每次调用都重新分配对象。
+ * <p>四个方向各提供一个不可变单例，避免 {@code actions()} 每次调用都重新分配对象。
  */
 public class PuzzleMove extends Action {
 
@@ -29,31 +27,31 @@ public class PuzzleMove extends Action {
     private final Direction direction;
 
     /**
-     * 私有构造，保证四个方向的动作全局只有一份实例
+     * 私有构造，保证每个方向的动作全局只有一份实例
      *
-     * @param direction 方向
+     * @param direction 移动方向
      */
     private PuzzleMove(Direction direction) {
         this.direction = direction;
     }
 
     /**
-     * @return 该动作的方向
+     * @return 移动方向
      */
     public Direction direction() {
         return direction;
     }
 
-    /** 在控制台上打印方向符号 */
+    /** 在控制台打印方向符号 */
     @Override
     public void draw() {
         System.out.println(this);
     }
 
     /**
-     * 每移动一步的耗散值恒为 1
+     * 每移动一步的代价恒为 1
      *
-     * @return 单步耗散值 1
+     * @return 单步代价 1
      */
     @Override
     public int stepCost() {
