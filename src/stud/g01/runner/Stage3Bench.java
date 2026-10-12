@@ -20,7 +20,7 @@ import stud.g01.problem.npuzzle.PuzzleBoard;
  * 系统属性 {@code -Dbench.heuristic=DISJOINT_PATTERN|MANHATTAN|MISPLACED}（默认 DISJOINT_PATTERN）、 {@code
  * -Dbench.engine=ida|astar}（默认 ida）。
  *
- * <p>口径与 BenchmarkRunner 一致：每组合先 1 次 JVM 预热（丢弃），再 N 次正式测量， 报告墙上时间的中位数与最小值；结点数为末次测量的值（同输入下逐位确定）。 PDB
+ * <p>测量口径：每组合先 1 次 JVM 预热（丢弃），再 N 次正式测量， 报告墙上时间的中位数与最小值；结点数为末次测量的值（同输入下逐位确定）。 PDB
  * 表构建发生在首次调用（预热轮），正式测量只计纯求解时间。
  */
 public final class Stage3Bench {
