@@ -19,55 +19,12 @@
   <build>
     <!-- 课程项目源码直接位于 src/ 下（algs4/core/stud），保持原目录结构不变 -->
     <sourceDirectory>src</sourceDirectory>
-    <!-- 零依赖断言式回归测试位于 test/ 下，仅参与编译，由 exec 在 verify 阶段执行 -->
-    <testSourceDirectory>test</testSourceDirectory>
 
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.14.0</version>
-      </plugin>
-
-      <!-- verify 阶段执行零依赖断言式回归测试（等价 scripts/test.sh） -->
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>3.5.0</version>
-        <executions>
-          <execution>
-            <id>regression-tests</id>
-            <phase>verify</phase>
-            <goals>
-              <goal>exec</goal>
-            </goals>
-            <configuration>
-              <executable>java</executable>
-              <arguments>
-                <argument>-ea</argument>
-                <argument>-cp</argument>
-                <argument>${project.build.outputDirectory}:${project.build.testOutputDirectory}</argument>
-                <argument>stud.g01.problem.npuzzle.NPuzzleFoundationTest</argument>
-              </arguments>
-            </configuration>
-          </execution>
-          <execution>
-            <id>pq-frontier-tests</id>
-            <phase>verify</phase>
-            <goals>
-              <goal>exec</goal>
-            </goals>
-            <configuration>
-              <executable>java</executable>
-              <arguments>
-                <argument>-ea</argument>
-                <argument>-cp</argument>
-                <argument>${project.build.outputDirectory}:${project.build.testOutputDirectory}</argument>
-                <argument>stud.queue.PqFrontierTest</argument>
-              </arguments>
-            </configuration>
-          </execution>
-        </executions>
       </plugin>
 
       <!-- 代码格式化：仅作用于 stud/**（algs4/core 为教师框架代码，保持原样） -->
