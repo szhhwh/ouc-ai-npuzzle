@@ -14,7 +14,9 @@ function parsePathText(text) {
     const summary = line.match(/启发函数[：:]\s*([A-Z_]+).*?解路径长度[：:]\s*(\d+).*?执行了\s*([\d.]+)s.*?生成了\s*(\d+).*?扩展了\s*(\d+)/);
     if (summary) {
       if (!boards.length || boards.length - 1 !== Number(summary[2])) throw new Error('摘要步数与棋盘序列不一致');
-      flush({heuristic: summary[1], timeMs: Number(summary[3])*1000, generated: Number(summary[4]), expanded: Number(summary[5]), timing: 'CPU 秒转毫秒（原始文本）'});
+      const engine = line.match(/搜索引擎[：:]\s*(astar|ida|nida|dijkstra)\b/i);
+      const algorithm = engine ? ({astar:'A*',ida:'IDA*',nida:'NIDA*',dijkstra:'Dijkstra'})[engine[1].toLowerCase()] : undefined;
+      flush({algorithm, heuristic: algorithm === 'Dijkstra' ? 'ZERO' : summary[1], timeMs: Number(summary[3])*1000, generated: Number(summary[4]), expanded: Number(summary[5]), timing: 'CPU 秒转毫秒（原始文本）'});
       continue;
     }
     const tokens = line.replace(/\|/g, ' ').trim().split(/\s+/);
@@ -104,7 +106,12 @@ function renderCharts(records) {
   }
 }
 function downloadFile(name, content, type) {
-  const url = URL.createObjectURL(new Blob([content],{type})); const link = document.createElement('a'); link.href=url; link.download=name; link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const url = URL.createObjectURL(new Blob([content],{type}));
+  const link = document.createElement('a'); link.href=url; link.download=name; link.hidden=true;
+  // Attach before activation for browsers that do not download detached anchors.
+  document.body.append(link); link.click(); link.remove();
+  // Give the browser time to consume the Blob before releasing its URL.
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 function csvCell(value) { const text = String(value ?? ''); return '"'+(/^[=+\-@\t\r]/.test(text) ? "'" : '')+text.replaceAll('"','""')+'"'; }
 function exportCsv(records) {

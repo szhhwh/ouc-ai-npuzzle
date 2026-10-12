@@ -23,25 +23,34 @@ public final class SolutionExporter {
     private SolutionExporter() {}
 
     public static void main(String[] args) throws IOException {
-        if (args.length != 5) {
+        if (args.length != 5 && args.length != 6) {
             throw new IllegalArgumentException(
-                    "用法: SolutionExporter input output astar|ida MANHATTAN,MISPLACED repeats");
+                    "用法: SolutionExporter input output astar|ida|nida|dijkstra MANHATTAN,MISPLACED repeats [--allow-pdb]");
         }
-        if (!args[2].equals("astar") && !args[2].equals("ida")) {
-            throw new IllegalArgumentException("engine 只支持 astar 或 ida");
+        String engine = args[2].toLowerCase(Locale.ROOT);
+        if (!List.of("astar", "ida", "nida", "dijkstra").contains(engine)) {
+            throw new IllegalArgumentException("未知搜索引擎: " + args[2]);
         }
+        boolean allowPdb = args.length == 6 && args[5].equals("--allow-pdb");
+        if (args.length == 6 && !allowPdb) throw new IllegalArgumentException("未知选项: " + args[5]);
         int repeats = Integer.parseInt(args[4]);
         if (repeats < 1 || repeats > 20) throw new IllegalArgumentException("重复次数须为 1–20");
         Path output = Path.of(args[1]);
         if (Files.exists(output)) throw new IllegalArgumentException("输出已存在，请选择新文件，避免覆盖实验");
         List<HeuristicType> kinds = new ArrayList<>();
         for (String name : args[3].split(",")) {
-            HeuristicType kind = HeuristicType.valueOf(name);
-            if (kind != HeuristicType.MANHATTAN && kind != HeuristicType.MISPLACED) {
-                throw new IllegalArgumentException("本导出器仅运行 MANHATTAN / MISPLACED，避免意外构建大型 PDB");
+            HeuristicType kind = HeuristicType.valueOf(name.trim().toUpperCase(Locale.ROOT));
+            if (kind != HeuristicType.MANHATTAN
+                    && kind != HeuristicType.MISPLACED
+                    && kind != HeuristicType.DISJOINT_PATTERN) {
+                throw new IllegalArgumentException("不支持的 N-Puzzle 启发函数: " + kind);
             }
+            if (kind == HeuristicType.DISJOINT_PATTERN && !engine.equals("dijkstra") && !allowPdb)
+                throw new IllegalArgumentException("PDB 可能占用大量内存和时间，请显式传入 --allow-pdb");
             kinds.add(kind);
         }
+        if (kinds.isEmpty()) throw new IllegalArgumentException("启发函数列表为空");
+        if (engine.equals("dijkstra")) kinds = List.of(HeuristicType.MANHATTAN);
         List<String> records = new ArrayList<>();
         PuzzleFeeder feeder = new PuzzleFeeder();
         int index = 0;
@@ -59,10 +68,7 @@ public final class SolutionExporter {
                 int expanded = -1;
                 int length = -1;
                 for (int run = 0; run <= repeats; run++) {
-                    AbstractSearcher searcher =
-                            args[2].equals("astar")
-                                    ? feeder.getAStar(kind)
-                                    : feeder.getIdaStar(kind);
+                    AbstractSearcher searcher = feeder.getSearcher(engine, kind);
                     long start = System.nanoTime();
                     Deque<Node> candidate = searcher.search(problem);
                     double millis = (System.nanoTime() - start) / 1_000_000.0;
@@ -105,9 +111,15 @@ public final class SolutionExporter {
                         "{\"name\":"
                                 + quote("课程实例 " + index)
                                 + ",\"algorithm\":"
-                                + quote(args[2].equals("astar") ? "A*" : "IDA*")
+                                + quote(
+                                        switch (engine) {
+                                            case "ida" -> "IDA*";
+                                            case "nida" -> "NIDA*";
+                                            case "dijkstra" -> "Dijkstra";
+                                            default -> "A*";
+                                        })
                                 + ",\"heuristic\":"
-                                + quote(kind.name())
+                                + quote(engine.equals("dijkstra") ? "ZERO" : kind.name())
                                 + ",\"source\":\"Java\",\"sourceFile\":"
                                 + quote(
                                         Objects.requireNonNull(Path.of(args[0]).getFileName())

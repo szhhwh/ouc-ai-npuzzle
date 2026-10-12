@@ -68,6 +68,10 @@ n  <n*n 个初始状态数字>  <n*n 个目标状态数字>
 3 5 0 8 4 2 1 7 3 6 1 2 3 4 5 6 7 8 0
 ```
 
+## 网页可视化与实验导出
+
+打开 `visualization/index.html` 可查看路径播放、同题实验图表、PDB 分组示意及独立浏览器 A* 教学轨迹。Java 标准 JSON 导出使用 `bash scripts/export-visualization.sh`，完整参数、安全限制和数据口径见 [可视化说明](visualization/README.md)。内置结果属于注明版本的实验快照，并非自动实时运行仓库代码。
+
 ## 开发规则
 
 - 不修改 `Problem`、`State`、`Action` 等课程类的公共接口。

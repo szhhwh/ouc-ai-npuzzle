@@ -74,9 +74,19 @@ bash scripts/export-visualization.sh
 bash scripts/export-visualization.sh resources/problems-stage1.txt /tmp/npuzzle-experiment.json astar MANHATTAN,MISPLACED 5
 ```
 
-引擎支持 `astar` / 通用 `ida`；启发函数支持 `MANHATTAN` / `MISPLACED`。不自动运行专用 NIDA 或构建 PDB。输入文件每行必须为 `n 初始排列 目标排列`，支持 n=3/4，逐行校验排列与可解性。十五数码难例可能非常耗时或超出 2GB 堆，默认仅运行第一阶段；不会因为网页支持十五数码就声称难例已完成。
+引擎与当前统一入口一致，支持 `astar`、通用 `ida`、专用 `nida`、`dijkstra`；通过 `PuzzleFeeder.getSearcher` 创建真实求解器。启发函数支持 `MANHATTAN`、`MISPLACED`、`DISJOINT_PATTERN`。Dijkstra 忽略启发函数，只运行一次，导出为 `ZERO`。PDB 必须在第六个参数显式传入 `--allow-pdb`，不会默认构建大型数据库。例如：
+
+```sh
+bash scripts/export-visualization.sh resources/problems-stage1.txt /tmp/npuzzle-pdb.json nida DISJOINT_PATTERN 5 --allow-pdb
+```
+
+输入文件每行必须为 `n 初始排列 目标排列`，支持 n=3/4，逐行校验排列与可解性。十五数码难例可能非常耗时或超出 2GB 堆，默认仅运行第一阶段；不会因为网页支持十五数码就声称难例已完成。专用 `nida` 仅在 PDB 配置下走特化路径，基础启发函数会转交通用 IDA*。
+
+普通命令行实验使用 `./scripts/run.sh problems-stage1.txt astar MISPLACED,MANHATTAN`；第二、三阶段输入分别为 `resources/problems-stage2.txt`、`resources/problems-stage3.txt`。网页 TXT 导入支持新版“搜索引擎”摘要，也兼容旧版摘要；旧版缺少算法名时保留“未提供”，不猜测算法。
 
 输出包含初始状态、每一步状态、声明目标、算法、启发函数、生成/扩展计数、五次或指定次数的原始墙钟耗时、中位数、预热次数、JDK/OS/架构、导出时间与源版本。每轮新建求解器，校验重复测量的步数和节点统计一致，输出前验证路径合法且达到目标。计时覆盖 `search` 调用，不包含编译和文件写入；结果不是跨平台性能保证。
+
+PDB 的首次建库/磁盘缓存加载由不计入样本的预热搜索触发；测量轮复用进程内数据库，因而导出耗时属于预热后的搜索，不是首次启动总耗时。建库耗时、缓存大小与峰值内存需另外记录。不要将其他人提供的、包含建库耗时的记录与该口径混比；只有基础样例已内置，尚无十五数码 PDB 正式性能数据。
 
 输出名以 `.js` 结尾时生成 `window.NPuzzleExamples = ...`，用于静态内置。当前 `examples.js` 由上述脚本以 **5 次测量**生成；源版本带 `dirty` 表示当时包含未提交源码，不冒充已提交版本。重新生成内置样例时先保留旧文件并选择新输出名，核验后再替换。
 
