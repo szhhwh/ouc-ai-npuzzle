@@ -4,7 +4,6 @@ import java.util.*;
 
 import core.problem.Problem;
 import core.solver.algorithm.heuristic.Predictor;
-import core.solver.algorithm.searcher.AbstractSearcher;
 import core.solver.queue.Frontier;
 import core.solver.queue.Node;
 

@@ -45,6 +45,6 @@ jobs:
         run: |
           set -o pipefail
           java -cp target/classes core.runner.SearchTester \
-            resources/pathfinding.txt PATHFINDING 1 stud.runner.WalkerFeeder | tee smoke.log
+            resources/pathfinding.txt stud.runner.WalkerFeeder astar PF_GRID,PF_EUCLID | tee smoke.log
           # pathfinding.txt 含 6 个实例，应全部求得解路径
           test "$(grep -c '解路径长度' smoke.log)" -ge 6

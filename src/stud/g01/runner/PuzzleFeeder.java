@@ -4,10 +4,12 @@ import core.problem.Problem;
 import core.runner.EngineFeeder;
 import core.solver.algorithm.heuristic.HeuristicType;
 import core.solver.algorithm.heuristic.Predictor;
+import core.solver.algorithm.searcher.AbstractSearcher;
 import core.solver.queue.EvaluationType;
 import core.solver.queue.Frontier;
 import core.solver.queue.Node;
 import java.util.ArrayList;
+import stud.g01.problem.npuzzle.NPuzzleIdaStar;
 import stud.g01.problem.npuzzle.NPuzzleProblem;
 import stud.g01.problem.npuzzle.PuzzleBoard;
 import stud.queue.PqFrontier;
@@ -73,5 +75,16 @@ public class PuzzleFeeder extends EngineFeeder {
     @Override
     public Predictor getPredictor(HeuristicType type) {
         return PuzzleBoard.predictor(type);
+    }
+
+    /**
+     * N-Puzzle 专用IdAStar，4阶上使用增量 PDB 查询。
+     *
+     * @param type 启发函数类型
+     * @return N-Puzzle 专用IdAStar
+     */
+    @Override
+    public AbstractSearcher getNIdaStar(HeuristicType type) {
+        return new NPuzzleIdaStar(getFrontier(EvaluationType.FULL), getPredictor(type));
     }
 }
