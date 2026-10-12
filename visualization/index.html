@@ -4,6 +4,7 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>N-Puzzle · 搜索的每一步</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="study.css">
 </head>
 <body>
   <header><a class="brand" href="./"><span class="brand-icon">N<span>·</span></span>N-PUZZLE <small>LAB</small></a><span class="course">OUC / 人工智能导论</span><a class="header-link" href="https://github.com/szhhwh/ouc-ai-npuzzle" target="_blank" rel="noreferrer">项目仓库 ↗</a></header>
@@ -18,7 +19,10 @@
       <aside><section class="settings card"><p class="eyebrow">CONFIGURATION</p><h2>探索设置</h2><label for="sample">选择实例</label><select id="sample"><option value="imported" disabled>已导入的路径</option><option value="0">课程实例 01 · 21 步</option><option value="1">课程实例 02 · 31 步</option><option value="2">课程实例 03 · 31 步</option></select><label>搜索算法</label><div class="algorithm"><span id="algorithm-name">A*</span><span id="algorithm-tag" class="tiny-tag">最优搜索</span></div><label>启发函数（内置演示设置）</label><div class="segmented"><button id="manhattan" class="selected">曼哈顿距离</button><button id="misplaced">错位将牌数</button></div><p id="heuristic-note" class="hint">所有数字块与目标位置的横纵距离之和，不计空格。</p><button id="solve" class="solve">重新求解 <span>↗</span></button><button id="import" class="import">＋ 导入 Java 解路径 JSON</button><input id="file" type="file" accept="application/json,.json" hidden><p id="message" class="message" role="status"></p></section>
         <section class="metrics card"><div class="metrics-heading"><h2>搜索记录</h2><span id="source">浏览器 A* 演示</span></div><div class="metric-grid"><div><span>解路径长度</span><strong id="length">—<small>步</small></strong></div><div><span>求解耗时</span><strong id="time">—<small>ms</small></strong></div><div><span>生成节点</span><strong id="generated">—</strong></div><div><span>扩展节点</span><strong id="expanded">—</strong></div></div><p id="metrics-note" class="hint">演示耗时取自当前浏览器；Java 实验数据请通过 JSON 导入。</p></section></aside>
     </div>
+    <section class="study card"><p class="eyebrow">01 / SOLUTION LIBRARY</p><h2>多个问题，一处回放。</h2><p>使用右侧导入按钮选择多个 JSON 或解路径 TXT；全部文件在本机读取。下方切换已导入记录，内置演示设置仍独立保留。</p><label for="result-list">已导入的解路径</label><select id="result-list" disabled aria-label="已导入的解路径"></select><h3>空格动作序列</h3><p class="hint">N / E / S / W 表示空格向北 / 东 / 南 / 西移动。点击任一步直接定位。</p><div id="moves" class="moves"></div></section>
+    <section class="study card"><p class="eyebrow">02 / EXPERIMENT RECORDS</p><h2>用数据解释搜索。</h2><p id="comparison-note">导入含 goal 的实验 JSON 后，展示同一问题下的数据。</p><div class="table-scroll"><table><thead><tr><th>文件 / 实例</th><th>算法</th><th>启发函数</th><th>步数</th><th>耗时 ms</th><th>生成节点</th><th>扩展节点</th></tr></thead><tbody id="comparison-body"></tbody></table></div></section>
+    <section class="study card"><p class="eyebrow">03 / PATTERN DATABASE</p><h2>把大问题，拆成小模式。</h2><p>只保留某组数字块及空格，其余位置抽象为“·”。下方跟随当前播放帧变化，展示仓库中的实际分组；这是原理示意，不是数据库查询或 PDB 启发值。</p><label for="pattern-kind">15-Puzzle 分组方案（8-Puzzle 固定 3–3–2）</label><select id="pattern-kind"><option value="ordinary">DisjointPdbHeuristic · 6–6–3</option><option value="ranked">RankedPdbHeuristic · 7–8</option></select><div id="patterns" class="patterns"></div><p class="hint">不相交模式数据库通过分摊移动代价得到可相加的下界；是否可相加取决于建库时的代价定义，并非随意把几个距离相加。</p></section>
     <section class="explanation"><div class="explanation-title"><span class="explain-icon">↗</span><div><p class="eyebrow">UNDER THE HOOD</p><h2>每一步，都有方向。</h2></div></div><p>数字块滑入空格，棋盘向目标靠近。A* 用 <code>f(n) = g(n) + h(n)</code> 衡量候选状态，在已走的路与预估距离之间寻找最优选择。</p><div class="keyboard"><kbd>Space</kbd> 播放 / 暂停 <span>·</span> <kbd>←</kbd><kbd>→</kbd> 单步探索</div></section>
     <footer><span>N-PUZZLE LAB <span class="footer-dot">/</span> 让算法变得可见</span><span>小组实验 · 第一阶段</span></footer>
-  </main><script src="app.js"></script>
+  </main><script src="examples.js"></script><script src="app.js"></script><script src="results.js"></script>
 </body></html>

@@ -8,7 +8,7 @@ let keyboard;
 function element() {
   return {
     style: { setProperty() {} }, classList: { toggle() {} },
-    append() {}, replaceChildren() {}, clientWidth: 276, clientHeight: 276, value: '0'
+    append() {}, after() {}, parentElement: {parentElement:{after(){}}}, replaceChildren() {}, clientWidth: 276, clientHeight: 276, value: '0'
   };
 }
 const document = {
@@ -70,3 +70,38 @@ assert.equal(vm.runInContext('timer',context), null);
 press('Space','DIV');
 assert.equal(vm.runInContext('timer',context), 1);
 console.log('Visualization regression checks passed.');
+vm.runInContext(fs.readFileSync(path.join(__dirname, 'results.js'), 'utf8'), context);
+vm.runInContext(`
+const textPath = '初始状态：\\n1 2 3\\n4 5 6\\n7 # 8\\n第 1 步，空格移动：E\\n1 2 3\\n4 5 6\\n7 8 #\\n总步数：1';
+assert.equal(parseResults(textPath).length,1);
+assert.equal(parseResults(textPath)[0].states.length,2);
+assert.equal(parseResults(textPath)[0].goal,undefined);
+assert.equal(parseResults(textPath+'\\n'+textPath).length,2);
+assert.throws(()=>parseResults(textPath.replace('总步数：1','总步数：2')));
+assert.throws(()=>parseResults('1 2 3\\n4 5 6'));
+assert.throws(()=>parseResults('没有棋盘'));
+assert.equal(parseResults(JSON.stringify({results:[{states:[target],goal:target}]})).length,1);
+assert.throws(()=>parseResults('{"results":[]}'));
+assert.equal(parseResults(textPath.replaceAll('1 2 3','| 1 | 2 | 3 |'))[0].states.length,2);
+const timed = parseResults(textPath+'\\n启发函数：MANHATTAN，解路径长度：1，执行了0.012s，共生成了3个结点，扩展了1个结点')[0];
+assert.equal(timed.timeMs,12);
+assert.equal(timed.algorithm,undefined);
+assert.equal(timed.expanded,1);
+`, context);
+console.log('Batch JSON / coursework text regression checks passed.');
+vm.runInContext(fs.readFileSync(path.join(__dirname, 'examples.js'), 'utf8'), context);
+vm.runInContext(`
+assert.equal(window.NPuzzleExamples.results.length,6);
+window.NPuzzleExamples.results.forEach((record,i)=>{
+  validate(record);
+  assert.equal(record.states.length-1,[21,21,31,31,31,31][i]);
+  assert.equal(record.source,'Java');
+  assert.equal(record.samplesMs.length,5);
+  const sorted=record.samplesMs.slice().sort((a,b)=>a-b);
+  assert.ok(Math.abs(record.timeMs-sorted[2])<0.000001);
+});
+assert.match(csvCell('=SUM(A1:A2)'),/^"'/);
+assert.equal(csvCell('a"b'),'"a""b"');
+assert.ok(exportCsv([{data:window.NPuzzleExamples.results[0],label:'sample'}]).includes('wall-median'));
+`,context);
+console.log('Real Java examples / median / CSV regression checks passed.');

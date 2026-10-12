@@ -31,6 +31,16 @@ jobs:
       - name: Build with quality gates (compile + Spotless + SpotBugs)
         run: ./mvnw -B -ntp verify
 
+      - name: Set up Node for visualization regression
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Visualization regression
+        run: |
+          node visualization/regression.cjs
+          node visualization/exporter-test.cjs
+
       - name: Pathfinding smoke test
         run: |
           set -o pipefail
