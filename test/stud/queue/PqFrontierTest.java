@@ -86,7 +86,11 @@ public final class PqFrontierTest {
     }
 
     private static PuzzleBoard board(int... tiles) {
-        return new PuzzleBoard(2, tiles);
+        byte[] cells = new byte[tiles.length];
+        for (int i = 0; i < tiles.length; i++) {
+            cells[i] = (byte) tiles[i];
+        }
+        return new PuzzleBoard(cells, 2);
     }
 
     private static void check(boolean condition, String message) {
