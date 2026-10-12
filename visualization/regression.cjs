@@ -105,3 +105,32 @@ assert.equal(csvCell('a"b'),'"a""b"');
 assert.ok(exportCsv([{data:window.NPuzzleExamples.results[0],label:'sample'}]).includes('wall-median'));
 `,context);
 console.log('Real Java examples / median / CSV regression checks passed.');
+const {traceAStar}=require('./search-trace.js');
+for(const heuristic of ['manhattan','misplaced']) {
+  const trace=traceAStar([1,3,6,5,0,2,4,7,8],heuristic);
+  assert.equal(trace.solved,true);
+  assert.equal(trace.path.length-1,8);
+  let generated=0,expanded=0;
+  for(const event of trace.events) {
+    assert.equal(event.candidates[0],event.current);
+    assert.equal(event.candidates.length,Math.min(6,event.frontierBefore));
+    const compare=(a,b)=>a.f-b.f || a.g-b.g || a.id-b.id;
+    for(let i=1;i<event.candidates.length;i++)assert.ok(compare(trace.nodes[event.candidates[i-1]],trace.nodes[event.candidates[i]])<=0);
+    generated+=event.children.length;
+    if(!event.found)expanded++;
+    assert.equal(event.generated,generated);
+    assert.equal(event.expanded,expanded);
+    for(const child of event.children)assert.equal(trace.nodes[child.id].parent,event.current);
+  }
+  for(let i=1;i<trace.path.length;i++) {
+    const a=trace.path[i-1].indexOf(0),b=trace.path[i].indexOf(0);
+    assert.equal(Math.abs(a%3-b%3)+Math.abs(Math.floor(a/3)-Math.floor(b/3)),1);
+  }
+}
+assert.equal(traceAStar([1,2,3,4,5,6,7,8,0]).events[0].expanded,0);
+assert.equal(traceAStar([1,3,6,5,0,2,4,7,8],'manhattan',1).truncated,true);
+assert.throws(()=>traceAStar([1,1,2,3,4,5,6,7,0]));
+assert.throws(()=>traceAStar([1,2,3,4,5,6,7,8,0],'unknown'));
+assert.throws(()=>traceAStar([2,1,3,4,5,6,7,8,0]));
+console.log('Search process trace regression checks passed.');
+require('./search-lab-test.cjs');

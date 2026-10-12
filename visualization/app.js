@@ -30,6 +30,7 @@ function play() { if (timer) { stop(); render(); return; } if (step === states.l
 function jump(value) { stop(); step = Math.max(0, Math.min(states.length - 1, value)); render(); }
 $('play').onclick = play; $('prev').onclick = () => jump(step - 1); $('next').onclick = () => jump(step + 1); $('reset').onclick = () => jump(0); $('progress').oninput = e => jump(Number(e.target.value));
 document.addEventListener('keydown', e => {
+  if (e.target.closest?.('#search-lab')) return;
   if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.target.isContentEditable) return;
   if (e.code === 'Space') {
     // 保留按钮原生的空格激活行为，避免一次按键触发两次播放切换。

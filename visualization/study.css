@@ -10,6 +10,34 @@
 .moves button { border:1px solid #d6e4f2; background:#f4f8fd; color:#004494; border-radius:7px; padding:8px 12px; cursor:pointer; }
 .moves button:hover { background:#004494; color:white; }
 .table-scroll { overflow:auto; }
+.search-lab { border-top:4px solid #004494; scroll-margin-top:20px; }
+.trace-controls { display:flex; flex-wrap:wrap; gap:20px; }
+.trace-candidates { grid-column:1/-1; background:#f2f7fc; border:1px solid #d6e1eb; border-radius:12px; padding:16px; }
+.trace-candidates h3 { margin-top:0; }
+.moves .trace-first { background:#004494; color:white; }
+.trace-controls label { flex:1; min-width:180px; }
+.trace-controls select { display:block; width:100%; margin-top:10px; }
+.trace-legend { display:flex; flex-wrap:wrap; gap:20px; font-size:12px; color:#526677; margin:16px 0; }
+.trace-layout { display:grid; grid-template-columns:1.3fr 1fr; gap:24px; align-items:start; }
+.trace-graph { padding:24px 12px; background:#f3f7fc; border-radius:16px; min-height:400px; }
+.trace-level { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
+.trace-arrow { text-align:center; margin:6px!important; color:#8399ad; }
+.trace-children { border-top:2px solid #cbdcec; margin-top:24px; padding-top:20px; }
+.trace-node { background:white; border:1px solid #d6e1eb; border-radius:10px; padding:12px; cursor:pointer; color:#526677; max-width:150px; text-align:center; }
+.trace-node strong { display:block; font-size:11px; margin-bottom:10px; }
+.trace-node small { display:block; margin-top:10px; font-size:10px; }
+.trace-node.active { border:2px solid #004494; box-shadow:0 5px 15px #00449418; color:#004494; }
+.trace-node.frontier,.trace-node.replaced { border-color:#00a6d8; }
+.trace-node.closed-pruned,.trace-node.duplicate-pruned,.trace-node.closed { background:#e9eef3; }
+.trace-mini { display:grid; grid-template-columns:repeat(3,1fr); gap:3px; width:90px; margin:auto; }
+.trace-mini span { aspect-ratio:1; display:grid; place-items:center; border-radius:4px; background:#e3edf7; color:#004494; font-size:14px; }
+.active .trace-mini span { background:#004494; color:white; }
+.trace-detail-board { width:150px; margin:20px 0; gap:5px; }
+.trace-detail-board span { font-size:22px; }
+.trace-inspector { display:block; min-width:0; padding:12px; }
+#trace-chart { width:100%; background:#f6f9fc; border-radius:8px; }
+#trace-progress { width:100%; margin:20px 0; accent-color:#004494; }
+@media(max-width:850px) { .trace-layout { grid-template-columns:1fr; } .trace-inspector { display:block; } }
 .charts { display:grid; grid-template-columns:1fr 1fr; gap:28px; margin:20px 0; }
 .chart-row { margin:14px 0; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
 .bar-track { height:12px; border-radius:5px; background:#edf3f9; margin-top:6px; overflow:hidden; }
