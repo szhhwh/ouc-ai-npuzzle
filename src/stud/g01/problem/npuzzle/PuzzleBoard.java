@@ -1,15 +1,8 @@
 package stud.g01.problem.npuzzle;
 
-import static core.solver.algorithm.heuristic.HeuristicType.DISJOINT_PATTERN;
-import static core.solver.algorithm.heuristic.HeuristicType.MANHATTAN;
-import static core.solver.algorithm.heuristic.HeuristicType.MISPLACED;
-
 import core.problem.Action;
 import core.problem.State;
-import core.solver.algorithm.heuristic.HeuristicType;
-import core.solver.algorithm.heuristic.Predictor;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.List;
 
 /**
@@ -161,97 +154,6 @@ public class PuzzleBoard extends State {
     @Override
     public Iterable<? extends Action> actions() {
         return ALL_MOVES;
-    }
-
-    // 启发函数类型到实现方法的映射
-    private static final EnumMap<HeuristicType, Predictor> predictors =
-            new EnumMap<>(HeuristicType.class);
-
-    static {
-        // 不在位数字块数，不计空格
-        predictors.put(
-                MISPLACED, (state, goal) -> ((PuzzleBoard) state).misplaced((PuzzleBoard) goal));
-        // 各数字块到目标位置的曼哈顿距离之和
-        predictors.put(
-                MANHATTAN, (state, goal) -> ((PuzzleBoard) state).manhattan((PuzzleBoard) goal));
-        // 可加模式数据库，第三阶段使用
-        predictors.put(DISJOINT_PATTERN, DisjointPdbHeuristic.predictor());
-    }
-
-    /**
-     * 按类型取对应的启发函数
-     *
-     * @param type 启发函数类型
-     * @return 对应的启发函数；未注册的类型返回 null
-     */
-    public static Predictor predictor(HeuristicType type) {
-        return predictors.get(type);
-    }
-
-    /**
-     * 不在位数字块数：当前盘面与目标盘面在同一位置上数字不同的数字块个数，不计空格
-     *
-     * @param goal 目标盘面
-     * @return 不在位数字块数
-     */
-    private int misplaced(PuzzleBoard goal) {
-        int count = 0;
-        for (int i = 0; i < cells.length; i++) {
-            if (cells[i] != 0 && cells[i] != goal.cells[i]) count++;
-        }
-        return count;
-    }
-
-    // 缓存完整目标盘面和距离表，使用 equals 同时校验边长和全部格子。
-    // 盘面与距离表打包为不可变记录、volatile 单次替换，并发下至多重复构建，不会读到撕裂的组合。
-    private static volatile GoalDistanceTable lastGoalTable;
-
-    /** 目标盘面与预计算距离表（dist[i * count + v] = 位置 i 上的数字块 v 到其目标位置的曼哈顿距离）的不可变配对 */
-    private record GoalDistanceTable(PuzzleBoard goal, byte[] dist) {
-        static GoalDistanceTable build(PuzzleBoard goal) {
-            int count = goal.cells.length;
-            int size = goal.size;
-            int[] pos = new int[count];
-            for (int i = 0; i < count; i++) {
-                pos[goal.cells[i]] = i;
-            }
-            // 空格的距离保持为 0；查询时只需一次数组读取。
-            byte[] dist = new byte[count * count];
-            for (int i = 0; i < count; i++) {
-                int row = i / size;
-                int col = i % size;
-                for (int v = 1; v < count; v++) {
-                    int j = pos[v];
-                    dist[i * count + v] =
-                            (byte) (Math.abs(row - j / size) + Math.abs(col - j % size));
-                }
-            }
-            return new GoalDistanceTable(goal, dist);
-        }
-    }
-
-    /**
-     * 曼哈顿距离：各数字块当前位置到目标位置的行、列距离之和的总和，不计空格
-     *
-     * @param goal 目标盘面
-     * @return 曼哈顿距离总和
-     */
-    private int manhattan(PuzzleBoard goal) {
-        // dist[i * count + v] 是位置 i 上的数字块 v 到它目标位置的曼哈顿距离；goal 没变就直接复用上次的表
-        GoalDistanceTable table = lastGoalTable;
-        if (table == null || !table.goal().equals(goal)) {
-            table = GoalDistanceTable.build(goal);
-            lastGoalTable = table;
-        }
-        byte[] dist = table.dist();
-
-        int distance = 0;
-        int count = cells.length;
-        for (int i = 0; i < count; i++) {
-            byte v = cells[i];
-            distance += dist[i * count + v];
-        }
-        return distance;
     }
 
     /** 两个盘面相等，当且仅当边长相同且逐格相同 */

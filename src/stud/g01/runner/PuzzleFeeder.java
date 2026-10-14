@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import stud.g01.problem.npuzzle.NPuzzleIdaStar;
 import stud.g01.problem.npuzzle.NPuzzleProblem;
 import stud.g01.problem.npuzzle.PuzzleBoard;
+import stud.g01.problem.npuzzle.PuzzleHeuristics;
 import stud.queue.PqFrontier;
 
 /** N-Puzzle 问题的 EngineFeeder。从输入文本解析问题实例，并提供 Frontier 和启发函数。 */
@@ -67,24 +68,27 @@ public class PuzzleFeeder extends EngineFeeder {
     }
 
     /**
-     * 按类型取启发函数，具体实现注册在 PuzzleBoard 中。
+     * 按类型取启发函数，具体实现注册在 PuzzleHeuristics 中。
      *
      * @param type 启发函数类型
      * @return 对应的启发函数，未注册时返回 null
      */
     @Override
     public Predictor getPredictor(HeuristicType type) {
-        return PuzzleBoard.predictor(type);
+        return PuzzleHeuristics.predictor(type);
     }
 
     /**
-     * N-Puzzle 专用IdAStar，4阶上使用增量 PDB 查询。
+     * PDB 使用 N-Puzzle 专用 IDA*；基础启发函数使用通用 IDA*。
      *
      * @param type 启发函数类型
-     * @return N-Puzzle 专用IdAStar
+     * @return 对应的 IDA* 搜索器
      */
     @Override
     public AbstractSearcher getNIdaStar(HeuristicType type) {
-        return new NPuzzleIdaStar(getFrontier(EvaluationType.FULL), getPredictor(type));
+        if (type == HeuristicType.DISJOINT_PATTERN) {
+            return new NPuzzleIdaStar();
+        }
+        return getIdaStar(type);
     }
 }

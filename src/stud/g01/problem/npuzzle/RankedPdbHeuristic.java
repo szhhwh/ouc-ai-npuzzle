@@ -1,14 +1,11 @@
 package stud.g01.problem.npuzzle;
 
+import static stud.g01.problem.npuzzle.RankedPdbEncoding.blankRank;
+import static stud.g01.problem.npuzzle.RankedPdbEncoding.blankRankOf;
+import static stud.g01.problem.npuzzle.RankedPdbEncoding.pack;
+import static stud.g01.problem.npuzzle.RankedPdbEncoding.rankOf;
+
 import core.solver.algorithm.heuristic.Predictor;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Map;
@@ -32,9 +29,6 @@ public final class RankedPdbHeuristic {
             this.tables = tables;
         }
     }
-
-    private static final Path CACHE_DIR = Paths.get("resources", "pdb-cache");
-    private static final int MAGIC = 0x52444231; // ASCII "RDB1"
 
     /**
      * 各棋盘规模的分组定义。4 阶取 7-8，即上两行的 {1..7} 与下两行的 {8..15}，两块在盘面上各自连贯且互补。目前只支持 4 阶，3
@@ -62,7 +56,7 @@ public final class RankedPdbHeuristic {
         return t;
     }
 
-    /** 某个 goal 对应的全部分组距离表和查询逻辑。字段在构建后只读，线程安全，包内可见，{@link NPuzzleIdaStar} 会直接读来实现增量查询。 */
+    /** 某个 goal 对应的全部分组距离表和查询逻辑。字段在构建后只读，线程安全，{@link RankedPdbContext} 使用这些表维护增量启发值。 */
     static final class Tables {
         final int size;
         final int cells;
@@ -76,8 +70,8 @@ public final class RankedPdbHeuristic {
         final int[] symPerm;
         final boolean symmetric;
 
-        /** perm[a][b] 是部分排列数 P(a,b)，按组内最大的 k 预填到对应长度 */
-        final int[][] perm;
+        /** 建表、全量查询和增量更新共用的排名规则 */
+        final RankedPdbEncoding encoding;
 
         Tables(int size, int[][] groups, byte[][][] tables, byte[] goalCells) {
             this.size = size;
@@ -88,16 +82,7 @@ public final class RankedPdbHeuristic {
 
             int maxK = 0;
             for (int[] g : groups) maxK = Math.max(maxK, g.length);
-            this.perm = new int[cells + 1][];
-            for (int a = 0; a <= cells; a++) {
-                perm[a] = new int[Math.min(a, maxK) + 1];
-                perm[a][0] = 1;
-                long p = 1;
-                for (int b = 1; b <= Math.min(a, maxK); b++) {
-                    p *= (a - b + 1);
-                    perm[a][b] = (int) p;
-                }
-            }
+            this.encoding = new RankedPdbEncoding(cells, maxK);
 
             this.transpose = new int[cells];
             for (int i = 0; i < cells; i++) {
@@ -150,7 +135,7 @@ public final class RankedPdbHeuristic {
             for (int i = 0; i < cells; i++) {
                 pos[c[i]] = i;
             }
-            int[] p = new int[8];
+            int[] p = new int[encoding.maxTiles];
             int sum = 0;
             for (int g = 0; g < groups.length; g++) {
                 int[] tiles = groups[g];
@@ -158,31 +143,9 @@ public final class RankedPdbHeuristic {
                 for (int j = 0; j < k; j++) {
                     p[j] = pos[tiles[j]];
                 }
-                sum += tables[g][blankRank(p, k, blank)][rankTuple(p, k)] & 0xFF;
+                sum += tables[g][blankRank(p, k, blank)][encoding.rankTuple(p, k)] & 0xFF;
             }
             return sum;
-        }
-
-        /** 计算 tuple 的部分排列排名 */
-        int rankTuple(int[] p, int k) {
-            int r = 0;
-            for (int i = 0; i < k; i++) {
-                int below = 0;
-                for (int j = 0; j < i; j++) {
-                    if (p[j] < p[i]) below++;
-                }
-                r += (p[i] - below) * perm[cells - 1 - i][k - 1 - i];
-            }
-            return r;
-        }
-
-        /** 计算空格在剩余位置中的序号 */
-        int blankRank(int[] p, int k, int blank) {
-            int below = 0;
-            for (int i = 0; i < k; i++) {
-                if (p[i] < blank) below++;
-            }
-            return blank - below;
         }
     }
 
@@ -190,82 +153,37 @@ public final class RankedPdbHeuristic {
         // 文件名带上分组签名，分组常量一变就换文件，配合头部校验避免不同分组误用同一份缓存
         StringBuilder sig = new StringBuilder("ranked-" + size + "-" + gi + "-" + tiles.length);
         for (int tile : tiles) sig.append('-').append(tile);
-        Path file = CACHE_DIR.resolve(sig + ".bin");
-        byte[][] cached = tryLoad(file, size, goalCells, tiles);
+        PdbCache cache = new PdbCache(sig + ".bin", PdbCache.Format.RANKED, size, goalCells, tiles);
+        byte[][] cached =
+                cache.tryLoad(
+                        in -> {
+                            int rest = in.readInt();
+                            int block = in.readInt();
+                            byte[][] data = new byte[rest][];
+                            for (int q = 0; q < rest; q++) {
+                                data[q] = new byte[block];
+                                in.readFully(data[q]);
+                            }
+                            return data;
+                        });
         if (cached != null) {
-            System.out.println("[RPDB] " + file + " 缓存命中（" + cached.length + " 块）");
+            System.out.println("[RPDB] " + cache.file + " 缓存命中（" + cached.length + " 块）");
             return cached;
         }
         long t0 = System.currentTimeMillis();
         byte[][] built = buildRankedTable(size, goalCells, tiles);
         System.out.printf(
                 "[RPDB] %s 构建（0-1 BFS）完成：%,d 项，耗时 %.1f s%n",
-                file,
+                cache.file,
                 (long) built.length * built[0].length,
                 (System.currentTimeMillis() - t0) / 1000.0);
-        tryWrite(file, size, goalCells, tiles, built);
+        cache.tryWrite(
+                out -> {
+                    out.writeInt(built.length);
+                    out.writeInt(built[0].length);
+                    for (byte[] block : built) out.write(block);
+                });
         return built;
-    }
-
-    /**
-     * 从缓存文件读入某一组的距离表，文件不存在或头部字段不匹配时返回 null。
-     *
-     * @param file 缓存文件路径
-     * @param size 棋盘边长
-     * @param goalCells 目标盘面
-     * @param tiles 组内数字
-     * @return 分块距离表，缓存无效时返回 null
-     */
-    private static byte[][] tryLoad(Path file, int size, byte[] goalCells, int[] tiles) {
-        if (!Files.isRegularFile(file)) return null;
-        try (DataInputStream in =
-                new DataInputStream(new BufferedInputStream(Files.newInputStream(file), 1 << 20))) {
-            if (in.readInt() != MAGIC) return null;
-            if (in.readInt() != size) return null;
-            int goalLen = in.readInt();
-            if (goalLen != goalCells.length) return null;
-            byte[] g = new byte[goalLen];
-            in.readFully(g);
-            if (!Arrays.equals(g, goalCells)) return null;
-            int n = in.readInt();
-            if (n != tiles.length) return null;
-            for (int tile : tiles) {
-                if (in.readInt() != tile) return null;
-            }
-            int rest = in.readInt();
-            int block = in.readInt();
-            byte[][] data = new byte[rest][];
-            for (int q = 0; q < rest; q++) {
-                data[q] = new byte[block];
-                in.readFully(data[q]);
-            }
-            return data;
-        } catch (IOException | RuntimeException e) {
-            return null;
-        }
-    }
-
-    private static void tryWrite(
-            Path file, int size, byte[] goalCells, int[] tiles, byte[][] data) {
-        try {
-            Files.createDirectories(CACHE_DIR);
-            try (DataOutputStream out =
-                    new DataOutputStream(
-                            new BufferedOutputStream(Files.newOutputStream(file), 1 << 20))) {
-                out.writeInt(MAGIC);
-                out.writeInt(size);
-                out.writeInt(goalCells.length);
-                out.write(goalCells);
-                out.writeInt(tiles.length);
-                for (int tile : tiles) out.writeInt(tile);
-                out.writeInt(data.length);
-                out.writeInt(data[0].length);
-                for (byte[] blk : data) out.write(blk);
-            }
-            System.out.println("[RPDB] 已写缓存 " + file);
-        } catch (IOException e) {
-            System.out.println("[RPDB] 缓存写入失败（" + file + "）：" + e);
-        }
     }
 
     /**
@@ -280,7 +198,8 @@ public final class RankedPdbHeuristic {
         final int cells = size * size;
         final int k = tiles.length;
         final int rest = cells - k;
-        final int block = perm(cells, k);
+        RankedPdbEncoding encoding = new RankedPdbEncoding(cells, k);
+        final int block = encoding.rankCount(k);
         byte[][] dist = new byte[rest][];
         for (int q = 0; q < rest; q++) {
             dist[q] = new byte[block];
@@ -295,27 +214,16 @@ public final class RankedPdbHeuristic {
             }
         }
 
-        int[][] nbr = neighbors(size);
-        // 静态 perm 权重（构建局部用，与 Tables.perm 同式）
-        int[][] perm = new int[cells][];
-        for (int a = 0; a < cells; a++) {
-            perm[a] = new int[Math.min(a, k) + 1];
-            perm[a][0] = 1;
-            long p = 1;
-            for (int b = 1; b <= Math.min(a, k); b++) {
-                p *= (a - b + 1);
-                perm[a][b] = (int) p;
-            }
-        }
+        int[][] nbr = PuzzleNeighbors.forSize(size);
 
         LongDeque deque = new LongDeque(1 << 20);
-        int base = rankTuple(tp, k, perm, cells);
+        int base = encoding.rankTuple(tp, k);
         boolean[] usedSrc = new boolean[cells];
         for (int j = 0; j < k; j++) usedSrc[tp[j]] = true;
         for (int b = 0; b < cells; b++) {
             if (!usedSrc[b]) {
                 long code = pack(base, blankRank(tp, k, b));
-                dist[qOf(code)][rOf(code)] = 0;
+                dist[blankRankOf(code)][rankOf(code)] = 0;
                 deque.addLast(code);
             }
         }
@@ -328,7 +236,7 @@ public final class RankedPdbHeuristic {
 
         while (!deque.isEmpty()) {
             long code = deque.pollFirst();
-            int q0 = qOf(code), r0 = rOf(code);
+            int q0 = blankRankOf(code), r0 = rankOf(code);
             if (settled[q0].get(r0)) continue;
             settled[q0].set(r0);
             settledCount++;
@@ -337,10 +245,7 @@ public final class RankedPdbHeuristic {
                         "    [RPDB build] settled %,d / %,d%n", settledCount, (long) rest * block);
             }
             int d = dist[q0][r0] & 0xFF;
-            int blank = decodeTuple(r0, k, p, used, perm, cells);
-            for (int i = 0; i < q0; i++) {
-                blank = nextUnused(blank + 1, used);
-            }
+            int blank = encoding.decode(r0, q0, k, p, used);
 
             for (int t : nbr[blank]) {
                 int slot = -1;
@@ -353,13 +258,13 @@ public final class RankedPdbHeuristic {
                 long nCode;
                 if (slot >= 0) {
                     p[slot] = blank;
-                    nCode = pack(rankTuple(p, k, perm, cells), blankRank(p, k, t));
+                    nCode = pack(encoding.rankTuple(p, k), blankRank(p, k, t));
                     p[slot] = t;
                 } else {
                     nCode = pack(r0, blankRank(p, k, t));
                 }
                 int nd = d + (slot >= 0 ? 1 : 0);
-                int nq = qOf(nCode), nr = rOf(nCode);
+                int nq = blankRankOf(nCode), nr = rankOf(nCode);
                 if ((dist[nq][nr] & 0xFF) > nd) {
                     dist[nq][nr] = (byte) nd;
                     if (slot >= 0) deque.addLast(nCode);
@@ -368,90 +273,6 @@ public final class RankedPdbHeuristic {
             }
         }
         return dist;
-    }
-
-    // 静态编码工具，供构建期使用
-
-    static long pack(int r, int q) {
-        return ((long) r << 6) | q;
-    }
-
-    static int qOf(long c) {
-        return (int) (c & 63);
-    }
-
-    static int rOf(long c) {
-        return (int) (c >>> 6);
-    }
-
-    static int perm(int n, int k) {
-        long r = 1;
-        for (int i = 0; i < k; i++) r *= (n - i);
-        return (int) r;
-    }
-
-    static int rankTuple(int[] p, int k, int[][] perm, int cells) {
-        int r = 0;
-        for (int i = 0; i < k; i++) {
-            int below = 0;
-            for (int j = 0; j < i; j++) {
-                if (p[j] < p[i]) below++;
-            }
-            r += (p[i] - below) * perm[cells - 1 - i][k - 1 - i];
-        }
-        return r;
-    }
-
-    static int blankRank(int[] p, int k, int blank) {
-        int below = 0;
-        for (int i = 0; i < k; i++) {
-            if (p[i] < blank) below++;
-        }
-        return blank - below;
-    }
-
-    /** 由排名逆展开出 tuple，返回剩余位置中最小的那个，调用方再按空格序号推进 */
-    static int decodeTuple(int r, int k, int[] p, boolean[] used, int[][] perm, int cells) {
-        Arrays.fill(used, false);
-        for (int i = 0; i < k; i++) {
-            int need = r / perm[cells - 1 - i][k - 1 - i];
-            r %= perm[cells - 1 - i][k - 1 - i];
-            int pos = -1;
-            for (int c = 0; c < cells; c++) {
-                if (!used[c] && --need < 0) {
-                    pos = c;
-                    break;
-                }
-            }
-            p[i] = pos;
-            used[pos] = true;
-        }
-        for (int c = 0; c < cells; c++) {
-            if (!used[c]) return c;
-        }
-        return -1;
-    }
-
-    private static int nextUnused(int from, boolean[] used) {
-        for (int c = from; c < used.length; c++) {
-            if (!used[c]) return c;
-        }
-        return -1;
-    }
-
-    private static int[][] neighbors(int size) {
-        int cells = size * size;
-        int[][] res = new int[cells][];
-        int[] buf = new int[4];
-        for (int i = 0; i < cells; i++) {
-            int r = i / size, c = i % size, n = 0;
-            if (r > 0) buf[n++] = i - size;
-            if (r < size - 1) buf[n++] = i + size;
-            if (c > 0) buf[n++] = i - 1;
-            if (c < size - 1) buf[n++] = i + 1;
-            res[i] = Arrays.copyOf(buf, n);
-        }
-        return res;
     }
 
     /** 可增长的循环数组 long 双端队列，供 0-1 BFS 使用 */
