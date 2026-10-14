@@ -37,16 +37,16 @@ public class IdAStar extends AbstractSearcher {
      */
     @Override
     public Deque<Node> search(Problem problem) {
-        // 不可解直接返回 null
-        if (!problem.solvable()) {
-            return null;
-        }
-
         // 复位上一次搜索留下的状态。explored 在这里充当当前路径的状态集合
         explored.clear();
         frontier.clear();
         nodesExpanded = 0;
         nodesGenerated = 0;
+        goalNode = null;
+
+        if (!problem.solvable()) {
+            return null;
+        }
 
         // 根结点的 h 值就是初始界限
         Node root = problem.root(predictor);

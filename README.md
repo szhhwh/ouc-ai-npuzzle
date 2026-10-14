@@ -1,27 +1,27 @@
 # OUC AI N-Puzzle 项目
 
-本项目使用课程提供的 Java 搜索框架求解 N-Puzzle。当前代码保留 `Problem`、`State`、`Action` 等公共接口，学生实现集中在 `src/stud/` 下。
+基于课程提供的 Java 搜索框架实现 N-Puzzle 求解，支持 A*、IDA* 和模式数据库（PDB）启发函数。
 
 ## 环境
 
-- JDK: Eclipse Temurin 25.0.4 LTS
+- JDK 25
 
 ## 目录结构
 
 ```text
 .
-├── resources/              课程测试数据
-├── scripts/                统一编译和运行入口
+├── resources/              问题实例与 PDB 缓存
+├── scripts/                编译、运行和导出脚本
 ├── src/
+│   ├── algs4/              算法工具库
 │   ├── core/               课程搜索框架
-│   └── stud/               学生实现
-│       └── g01/           本小组的 N-Puzzle 实现
-└── out/                    本地编译产物，不提交
+│   └── stud/               学生实现，N-Puzzle 位于 g01/
+└── visualization/          网页可视化
 ```
 
 ## 编译
 
-完整质量门（编译、格式检查和静态分析）：
+使用 Maven Wrapper 编译，并运行格式检查与静态分析：
 
 ```bash
 ./mvnw -B -ntp verify
@@ -33,26 +33,32 @@
 ./mvnw spotless:apply
 ```
 
-也可从任意目录调用 `./scripts/compile.sh` 完成编译。
+也可运行 `./scripts/compile.sh`，将编译结果输出到 `out/`。Maven 的编译结果位于 `target/classes/`。
 
 ## 运行
 
-运行测试实例：
+运行问题实例：
 
 ```bash
 ./scripts/run.sh problems-stage1.txt astar MISPLACED,MANHATTAN
 ```
 
-脚本会先编译，再调用框架入口 `core.runner.SearchTester`。问题文件可省略 `resources/` 前缀，脚本会自动补全。测试实例按阶段存放在 `resources/` 下：`problems-stage1.txt` 为三个 8-Puzzle 实例，`problems-stage2.txt` 为三个 15-Puzzle 实例，`problems-stage3.txt` 为第三阶段的十个实例。
+脚本会先编译，再调用 `core.runner.SearchTester`。问题文件可省略 `resources/` 前缀。课程实例存放在 `resources/problems-stage1.txt`、`problems-stage2.txt` 和 `problems-stage3.txt` 中。
 
-已编译时也可以直接调用框架入口：
+使用 Maven 编译后，也可直接运行：
 
 ```bash
-java -cp out core.runner.SearchTester \
+java -cp target/classes core.runner.SearchTester \
   resources/problems-stage1.txt stud.g01.runner.PuzzleFeeder astar MISPLACED,MANHATTAN
 ```
 
-四个参数依次为：问题文件、`EngineFeeder` 实现类全限定名、搜索引擎、启发函数列表。搜索引擎取值 `astar`、`ida`、`nida`、`dijkstra`；启发函数列表用逗号分隔，取值见 `HeuristicType`，两者可任意搭配。当前实现使用带状态索引和惰性删除的 `PqFrontier`。
+四个参数依次为：问题文件、`EngineFeeder` 实现类全限定名、搜索引擎、启发函数列表。
+
+- 搜索引擎：`astar`、`ida`、`nida`、`dijkstra`。
+- N-Puzzle 启发函数：`MISPLACED`（错位数）、`MANHATTAN`（曼哈顿距离）、`DISJOINT_PATTERN`（PDB），多个值用逗号分隔。
+- `nida` 配合 PDB 使用专用 IDA*；配合其他启发函数使用通用 IDA*。
+
+PDB 支持三阶和四阶棋盘，首次使用时建表，缓存存放在 `resources/pdb-cache/`。三阶使用 3-3-2 分组；四阶的 `astar/ida` 使用 6-6-3 分组，`nida` 使用 7-8 分组，后者需要较大的内存。
 
 ## N-Puzzle 输入格式
 
@@ -70,12 +76,4 @@ n  <n*n 个初始状态数字>  <n*n 个目标状态数字>
 
 ## 网页可视化与实验导出
 
-打开 `visualization/index.html` 可查看路径播放、同题实验图表、PDB 分组示意及独立浏览器 A* 教学轨迹。Java 标准 JSON 导出使用 `bash scripts/export-visualization.sh`，完整参数、安全限制和数据口径见 [可视化说明](visualization/README.md)。内置结果属于注明版本的实验快照，并非自动实时运行仓库代码。
-
-## 开发规则
-
-- 不修改 `Problem`、`State`、`Action` 等课程类的公共接口。
-- 从最新 `main` 创建功能分支，不直接在 `main` 开发。
-- 提交前至少运行 `./mvnw -B -ntp verify`。
-- 不提交 `out/`、`result/`、`.idea/`、`.DS_Store` 或其他本地产物。
-- 启发函数和可解性判断必须支持输入中给定的任意目标状态。
+打开 `visualization/index.html` 可查看解路径播放、实验图表、PDB 分组示意和 A* 教学轨迹。使用 `bash scripts/export-visualization.sh` 导出 Java 求解结果，参数见 [可视化说明](visualization/README.md)。

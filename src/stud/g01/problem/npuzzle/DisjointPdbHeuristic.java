@@ -1,14 +1,6 @@
 package stud.g01.problem.npuzzle;
 
 import core.solver.algorithm.heuristic.Predictor;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Map;
@@ -33,12 +25,6 @@ public final class DisjointPdbHeuristic {
 
     private static volatile Memo lastMemo;
 
-    /** 磁盘缓存目录，相对当前工作目录 */
-    private static final Path CACHE_DIR = Paths.get("resources", "pdb-cache");
-
-    /** 缓存文件头的魔数，即 ASCII 的 "PDB1" */
-    private static final int MAGIC = 0x50444231;
-
     /** 各棋盘规模的分组定义。4 阶取 6-6-3：左两列、右两列、底行；3 阶取 3-3-2。某个规模不在表里表示不支持。 */
     private static final Map<Integer, int[][]> GROUPINGS =
             Map.of(
@@ -59,7 +45,7 @@ public final class DisjointPdbHeuristic {
     /**
      * 取目标盘面对应的整套表，未构建则构建。
      *
-     * <p>包内可见，供 {@link NPuzzleIdaStar} 取到同一套表。
+     * <p>包内可见，供 {@link ProductPdbContext} 使用同一套表维护增量启发值。
      */
     static Tables tablesFor(PuzzleBoard goal) {
         Memo m = lastMemo;
@@ -201,81 +187,42 @@ public final class DisjointPdbHeuristic {
      * @param gi 组号，用于命名缓存文件
      */
     private static byte[] loadOrBuildGroup(int size, byte[] goalCells, int[] tiles, int gi) {
-        Path file = CACHE_DIR.resolve("pdb-" + size + "-" + gi + ".bin");
-        byte[] cached = tryLoad(file, size, goalCells, tiles);
+        PdbCache cache =
+                new PdbCache(
+                        "pdb-" + size + "-" + gi + ".bin",
+                        PdbCache.Format.PRODUCT,
+                        size,
+                        goalCells,
+                        tiles);
+        byte[] cached =
+                cache.tryLoad(
+                        in -> {
+                            int length = in.readInt();
+                            if (length != tableLength(size, tiles.length)) return null;
+                            byte[] data = new byte[length];
+                            in.readFully(data);
+                            return data;
+                        });
         if (cached != null) {
-            System.out.println("[PDB] " + file + " 缓存命中（" + cached.length + " 项）");
+            System.out.println("[PDB] " + cache.file + " 缓存命中（" + cached.length + " 项）");
             return cached;
         }
         long t0 = System.currentTimeMillis();
         byte[] built = buildGroupTable(size, goalCells, tiles);
         System.out.println(
                 "[PDB] "
-                        + file
+                        + cache.file
                         + " 缓存未命中或校验失败，0-1 BFS 重建完成："
                         + built.length
                         + " 项，耗时 "
                         + (System.currentTimeMillis() - t0)
                         + " ms");
-        tryWrite(file, size, goalCells, tiles, built);
+        cache.tryWrite(
+                out -> {
+                    out.writeInt(built.length);
+                    out.write(built);
+                });
         return built;
-    }
-
-    /**
-     * 从缓存文件读入某组距离表，文件不存在或头部字段不匹配时返回 null。
-     *
-     * @param file 缓存文件路径
-     * @param size 棋盘边长
-     * @param goalCells 目标盘面
-     * @param tiles 组内数字
-     * @return 距离表，缓存无效时返回 null
-     */
-    private static byte[] tryLoad(Path file, int size, byte[] goalCells, int[] tiles) {
-        if (!Files.isRegularFile(file)) return null;
-        try (DataInputStream in =
-                new DataInputStream(new BufferedInputStream(Files.newInputStream(file), 1 << 16))) {
-            if (in.readInt() != MAGIC) return null;
-            if (in.readInt() != size) return null;
-            int goalLen = in.readInt();
-            if (goalLen != goalCells.length) return null;
-            byte[] g = new byte[goalLen];
-            in.readFully(g);
-            if (!Arrays.equals(g, goalCells)) return null; // goal 变了，缓存失效
-            int n = in.readInt();
-            if (n != tiles.length) return null; // 分组对不上，缓存失效
-            for (int tile : tiles) {
-                if (in.readInt() != tile) return null;
-            }
-            int len = in.readInt();
-            if (len != tableLength(size, tiles.length)) return null;
-            byte[] data = new byte[len];
-            in.readFully(data);
-            return data;
-        } catch (IOException | RuntimeException e) {
-            return null; // 读半截文件、被截断等任何异常都视为缓存无效
-        }
-    }
-
-    /** 把某组距离表写入缓存文件。写盘失败只打印告警，表仍在内存中可用 */
-    private static void tryWrite(Path file, int size, byte[] goalCells, int[] tiles, byte[] data) {
-        try {
-            Files.createDirectories(CACHE_DIR);
-            try (DataOutputStream out =
-                    new DataOutputStream(
-                            new BufferedOutputStream(Files.newOutputStream(file), 1 << 16))) {
-                out.writeInt(MAGIC);
-                out.writeInt(size);
-                out.writeInt(goalCells.length);
-                out.write(goalCells);
-                out.writeInt(tiles.length);
-                for (int tile : tiles) out.writeInt(tile);
-                out.writeInt(data.length);
-                out.write(data);
-            }
-            System.out.println("[PDB] 已写缓存 " + file + "（" + data.length + " 字节）");
-        } catch (IOException e) {
-            System.out.println("[PDB] 缓存写入失败（" + file + "）：" + e + "；不影响本次运行，表保留在内存中");
-        }
     }
 
     /**
@@ -308,7 +255,7 @@ public final class DisjointPdbHeuristic {
         }
 
         // 预先算好各格子的四邻，热循环里就不用做边界判断
-        final int[][] nbr = neighbors(size);
+        final int[][] nbr = PuzzleNeighbors.forSize(size);
 
         // 起点是组内数字全部就位、空格在任意其余格子的所有配置，都以 dist=0 入队
         IntDeque deque = new IntDeque(1 << 12);
@@ -386,22 +333,6 @@ public final class DisjointPdbHeuristic {
     /** 某组距离表的项数，即 cells^(组内数字个数+1) */
     private static int tableLength(int size, int tiles) {
         return pow(size * size, tiles + 1);
-    }
-
-    /** 预先算好每个格子在棋盘内的四邻位置，供 BFS 热循环直接遍历 */
-    private static int[][] neighbors(int size) {
-        int cells = size * size;
-        int[][] nbr = new int[cells][];
-        int[] buf = new int[4];
-        for (int i = 0; i < cells; i++) {
-            int r = i / size, c = i % size, n = 0;
-            if (r > 0) buf[n++] = i - size; // 上方
-            if (r < size - 1) buf[n++] = i + size; // 下方
-            if (c > 0) buf[n++] = i - 1; // 左方
-            if (c < size - 1) buf[n++] = i + 1; // 右方
-            nbr[i] = Arrays.copyOf(buf, n);
-        }
-        return nbr;
     }
 
     /** 可增长的循环数组 int 双端队列，供 0-1 BFS 使用，避免 Integer 装箱 */
