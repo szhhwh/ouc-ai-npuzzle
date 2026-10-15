@@ -5,7 +5,6 @@ import static stud.g01.problem.npuzzle.RankedPdbEncoding.blankRankOf;
 import static stud.g01.problem.npuzzle.RankedPdbEncoding.pack;
 import static stud.g01.problem.npuzzle.RankedPdbEncoding.rankOf;
 
-import core.solver.algorithm.heuristic.Predictor;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Map;
@@ -39,11 +38,6 @@ public final class RankedPdbHeuristic {
 
     private RankedPdbHeuristic() {}
 
-    /** 返回带对称增强的启发函数，每次查询都全量查表。供 A* 和通用 IDA* 使用。 */
-    public static Predictor predictor() {
-        return (state, goal) -> tablesFor((PuzzleBoard) goal).hMax((PuzzleBoard) state);
-    }
-
     /** 取 goal 对应的整套表，未构建则构建。查找方式与 DisjointPdbHeuristic 一致。 */
     static Tables tablesFor(PuzzleBoard goal) {
         Memo m = lastMemo;
@@ -56,7 +50,7 @@ public final class RankedPdbHeuristic {
         return t;
     }
 
-    /** 某个 goal 对应的全部分组距离表和查询逻辑。字段在构建后只读，线程安全，{@link RankedPdbContext} 使用这些表维护增量启发值。 */
+    /** 某个 goal 对应的全部分组距离表和对称信息。字段在构建后只读，线程安全，{@link RankedPdbContext} 使用这些表维护增量启发值。 */
     static final class Tables {
         final int size;
         final int cells;
@@ -70,7 +64,7 @@ public final class RankedPdbHeuristic {
         final int[] symPerm;
         final boolean symmetric;
 
-        /** 建表、全量查询和增量更新共用的排名规则 */
+        /** 建表和增量更新共用的排名规则 */
         final RankedPdbEncoding encoding;
 
         Tables(int size, int[][] groups, byte[][][] tables, byte[] goalCells) {
@@ -108,44 +102,6 @@ public final class RankedPdbHeuristic {
                 ts[g] = loadOrBuildGroup(size, goal.cells(), groups[g], g);
             }
             return new Tables(size, groups, ts, goal.cells().clone());
-        }
-
-        /** 把各组的表值相加 */
-        int h(PuzzleBoard state) {
-            return hCells(state.cells(), state.blank());
-        }
-
-        /** 取直接查表和与对称态查表中的较大值；不满足对称条件时退化为直接查询 */
-        int hMax(PuzzleBoard state) {
-            int direct = h(state);
-            if (!symmetric) {
-                return direct;
-            }
-            byte[] c = state.cells();
-            byte[] t = new byte[cells];
-            for (int i = 0; i < cells; i++) {
-                t[i] = (byte) symPerm[c[transpose[i]]];
-            }
-            return Math.max(direct, hCells(t, transpose[state.blank()]));
-        }
-
-        /** 全量查表，h 和 hMax 的公共实现 */
-        private int hCells(byte[] c, int blank) {
-            int[] pos = new int[cells];
-            for (int i = 0; i < cells; i++) {
-                pos[c[i]] = i;
-            }
-            int[] p = new int[encoding.maxTiles];
-            int sum = 0;
-            for (int g = 0; g < groups.length; g++) {
-                int[] tiles = groups[g];
-                int k = tiles.length;
-                for (int j = 0; j < k; j++) {
-                    p[j] = pos[tiles[j]];
-                }
-                sum += tables[g][blankRank(p, k, blank)][encoding.rankTuple(p, k)] & 0xFF;
-            }
-            return sum;
         }
     }
 
