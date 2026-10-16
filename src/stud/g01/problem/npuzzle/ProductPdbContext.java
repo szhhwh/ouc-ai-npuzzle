@@ -4,131 +4,89 @@ package stud.g01.problem.npuzzle;
 final class ProductPdbContext extends PdbContext {
 
     private final DisjointPdbHeuristic.Tables tbl;
-    private final int[] tileGroup, tileSlot;
-    private final int[][] weight;
-    private final int[] transpose, symPerm;
-    private final int[] idx, idxSym;
+    private final int[] tileGroup, tileWeight, mirroredGroup, mirroredWeight;
+    private final int[] transpose;
+    private final int[] idx, idxSym, values, symmetricValues;
 
     ProductPdbContext(PuzzleBoard initial, DisjointPdbHeuristic.Tables tables) {
         super(initial);
         tbl = tables;
 
-        weight = new int[tbl.groups.length][];
-        for (int g = 0; g < tbl.groups.length; g++) {
-            int d = tbl.groups[g].length;
-            weight[g] = new int[d];
-            for (int j = 0; j < d; j++) {
-                weight[g][j] = pow(cells, d - j);
-            }
-        }
-        tileGroup = new int[cells];
-        tileSlot = new int[cells];
-        for (int g = 0; g < tbl.groups.length; g++) {
-            for (int j = 0; j < tbl.groups[g].length; j++) {
-                tileGroup[tbl.groups[g][j]] = g;
-                tileSlot[tbl.groups[g][j]] = j;
-            }
-        }
+        tileGroup = tbl.tileGroup;
+        tileWeight = tbl.tileWeight;
+        mirroredGroup = tbl.mirroredGroup;
+        mirroredWeight = tbl.mirroredWeight;
         transpose = tbl.transpose;
-        symPerm = tbl.symPerm;
 
         // 初始编码一次算好，之后全部增量更新
-        int[] pos = new int[cells];
-        for (int i = 0; i < cells; i++) {
-            pos[board[i]] = i;
-        }
+        long positions = initial.positions();
         idx = new int[tbl.groups.length];
         idxSym = new int[tbl.groups.length];
-        // inv 是 symPerm 的逆置换，用来定位对称盘面里各数字块的位置
-        int[] inv = new int[cells];
-        for (int v = 0; v < cells; v++) {
-            inv[symPerm[v]] = v;
-        }
+        values = new int[tbl.groups.length];
+        symmetricValues = new int[tbl.groups.length];
         for (int g = 0; g < tbl.groups.length; g++) {
             int[] tiles = tbl.groups[g];
             int e = 0;
             for (int j = 0; j < tiles.length; j++) {
-                e += pos[tiles[j]] * weight[g][j];
+                int position = (int) (positions >>> (tiles[j] * 4)) & 15;
+                e += position * tileWeight[tiles[j]];
             }
             idx[g] = e + blank;
-            directHeuristic += tbl.tables[g][idx[g]] & 0xFF;
+            values[g] = tbl.tables[g][idx[g]] & 0xFF;
+            directHeuristic += values[g];
 
             if (tbl.symmetric) {
                 int es = 0;
                 for (int j = 0; j < tiles.length; j++) {
-                    es += transpose[pos[inv[tiles[j]]]] * weight[g][j];
+                    // A diagonal reflection is its own inverse.
+                    int position = (int) (positions >>> (tbl.symPerm[tiles[j]] * 4)) & 15;
+                    es += transpose[position] * tileWeight[tiles[j]];
                 }
                 idxSym[g] = es + transpose[blank];
-                symmetricHeuristic += tbl.tables[g][idxSym[g]] & 0xFF;
+                symmetricValues[g] = tbl.tables[g][idxSym[g]] & 0xFF;
+                symmetricHeuristic += symmetricValues[g];
             }
         }
         symmetric = tbl.symmetric;
     }
 
     @Override
-    int heuristicAfterMove(int t) {
-        int b = blank;
-        byte v = board[t];
-        int g = tileGroup[v], j = tileSlot[v];
-        byte[] tab = tbl.tables[g];
-        int nw = idx[g] + (b - t) * (weight[g][j] - 1);
-        int hv = directHeuristic + (tab[nw] & 0xFF) - (tab[idx[g]] & 0xFF);
+    void prepareValues(Move move) {
+        int g = tileGroup[move.tile];
+        move.group = g;
+        move.oldIndex = idx[g];
+        move.index = idx[g] + (move.from - move.to) * (tileWeight[move.tile] - 1);
+        move.oldValue = values[g];
+        move.value = tbl.tables[g][move.index] & 0xFF;
+        move.direct = directHeuristic + move.value - move.oldValue;
+        move.symmetric = symmetricHeuristic;
         if (symmetric) {
-            int sv = symPerm[v];
-            int gs = tileGroup[sv], js = tileSlot[sv];
-            byte[] tabS = tbl.tables[gs];
-            int nwS = idxSym[gs] + (transpose[b] - transpose[t]) * (weight[gs][js] - 1);
-            int hs2 = symmetricHeuristic + (tabS[nwS] & 0xFF) - (tabS[idxSym[gs]] & 0xFF);
-            if (hs2 > hv) {
-                hv = hs2;
-            }
+            int gs = mirroredGroup[move.tile];
+            move.symmetricGroup = gs;
+            move.oldSymmetricIndex = idxSym[gs];
+            move.symmetricIndex =
+                    idxSym[gs]
+                            + (transpose[move.from] - transpose[move.to])
+                                    * (mirroredWeight[move.tile] - 1);
+            move.oldSymmetricValue = symmetricValues[gs];
+            move.symmetricValue = tbl.tables[gs][move.symmetricIndex] & 0xFF;
+            move.symmetric += move.symmetricValue - move.oldSymmetricValue;
         }
-        return hv;
     }
 
     @Override
-    void apply(int t) {
-        int b = blank;
-        byte v = board[t];
-        int g = tileGroup[v], j = tileSlot[v];
-        byte[] tab = tbl.tables[g];
-        int old = idx[g];
-        int nw = old + (b - t) * (weight[g][j] - 1);
-        directHeuristic += (tab[nw] & 0xFF) - (tab[old] & 0xFF);
-        idx[g] = nw;
-        // 其余组的表值不变，只需同步平移编码里的空格维度
-        int dbt = t - b;
-        for (int gg = 0; gg < idx.length; gg++) {
-            if (gg != g) {
-                idx[gg] += dbt;
-            }
-        }
-
+    void updateValues(Move move, boolean undo) {
+        int delta = undo ? move.from - move.to : move.to - move.from;
+        for (int g = 0; g < idx.length; g++) idx[g] += delta;
+        idx[move.group] = undo ? move.oldIndex : move.index;
+        values[move.group] = undo ? move.oldValue : move.value;
         if (symmetric) {
-            int tb = transpose[b], tt = transpose[t];
-            byte sv = (byte) symPerm[v];
-            int gs = tileGroup[sv], js = tileSlot[sv];
-            byte[] tabS = tbl.tables[gs];
-            int oldS = idxSym[gs];
-            int nwS = oldS + (tb - tt) * (weight[gs][js] - 1);
-            symmetricHeuristic += (tabS[nwS] & 0xFF) - (tabS[oldS] & 0xFF);
-            idxSym[gs] = nwS;
-            int dbs = tt - tb;
-            for (int gg = 0; gg < idxSym.length; gg++) {
-                if (gg != gs) {
-                    idxSym[gg] += dbs;
-                }
-            }
+            int ds = transpose[move.to] - transpose[move.from];
+            if (undo) ds = -ds;
+            for (int g = 0; g < idxSym.length; g++) idxSym[g] += ds;
+            idxSym[move.symmetricGroup] = undo ? move.oldSymmetricIndex : move.symmetricIndex;
+            symmetricValues[move.symmetricGroup] =
+                    undo ? move.oldSymmetricValue : move.symmetricValue;
         }
-
-        swapBlank(t);
-    }
-
-    private static int pow(int base, int exp) {
-        int r = 1;
-        for (int i = 0; i < exp; i++) {
-            r *= base;
-        }
-        return r;
     }
 }

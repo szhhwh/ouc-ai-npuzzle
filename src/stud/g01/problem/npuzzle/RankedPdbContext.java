@@ -1,10 +1,5 @@
 package stud.g01.problem.npuzzle;
 
-import static stud.g01.problem.npuzzle.RankedPdbEncoding.blankRank;
-import static stud.g01.problem.npuzzle.RankedPdbEncoding.blankRankOf;
-import static stud.g01.problem.npuzzle.RankedPdbEncoding.pack;
-import static stud.g01.problem.npuzzle.RankedPdbEncoding.rankOf;
-
 /** ranked 编码的搜索上下文，用排名增量维护启发值，适用于 4 阶 */
 final class RankedPdbContext extends PdbContext {
 
@@ -16,8 +11,8 @@ final class RankedPdbContext extends PdbContext {
     // 数字块在直链和对称链上的位置，逐步增量维护
     private final int[] pos, posSym;
 
-    // 每组的排名和空格序号，直链与对称链各一套
-    private final int[] rG, qG, rS, qS;
+    // Per-group ranks and cached distances, for both orientations.
+    private final int[] rG, rS, values, symmetricValues;
     // 每组的数字块位置位图，bit i 为 1 表示该组有数字块在格子 i
     private final int[] maskG, maskS;
 
@@ -44,9 +39,9 @@ final class RankedPdbContext extends PdbContext {
         }
 
         rG = new int[gn];
-        qG = new int[gn];
+        values = new int[gn];
         rS = new int[gn];
-        qS = new int[gn];
+        symmetricValues = new int[gn];
         maskG = new int[gn];
         maskS = new int[gn];
 
@@ -69,8 +64,8 @@ final class RankedPdbContext extends PdbContext {
                 maskG[g] |= 1 << p[j];
             }
             rG[g] = tbl.encoding.rankTuple(p, k);
-            qG[g] = blankRank(maskG[g], blank);
-            directHeuristic += tbl.tables[g][qG[g]][rG[g]] & 0xFF;
+            values[g] = tbl.distance(g, rG[g], maskG[g], blank);
+            directHeuristic += values[g];
 
             if (symmetric) {
                 for (int j = 0; j < k; j++) {
@@ -78,25 +73,14 @@ final class RankedPdbContext extends PdbContext {
                     maskS[g] |= 1 << ps[j];
                 }
                 rS[g] = tbl.encoding.rankTuple(ps, k);
-                qS[g] = blankRank(maskS[g], transpose[blank]);
-                symmetricHeuristic += tbl.tables[g][qS[g]][rS[g]] & 0xFF;
+                symmetricValues[g] = tbl.distance(g, rS[g], maskS[g], transpose[blank]);
+                symmetricHeuristic += symmetricValues[g];
             }
         }
     }
 
-    /**
-     * 计算某一组在数字块从 t 移到 b 后的新排名和新空格序号。
-     *
-     * @param posArr 数字块位置数组
-     * @param rArr 该组的排名
-     * @param maskArr 该组的数字块位置位图
-     * @param g 组号
-     * @param j 被移动数字块在组内的下标
-     * @param t 移动前的位置
-     * @param b 移动后的位置
-     * @return 打包后的新排名和新空格序号
-     */
-    private long passiveDelta(int[] posArr, int[] rArr, int[] maskArr, int g, int j, int t, int b) {
+    /** Update only the rank terms affected by the moving tile. */
+    private int rankAfterMove(int[] posArr, int[] rArr, int g, int j, int t, int b) {
         int k = tilesOf[g].length;
         int[] tiles = tilesOf[g];
         int belowT = 0, belowB = 0, dR = 0;
@@ -115,80 +99,46 @@ final class RankedPdbContext extends PdbContext {
         int dAj = (b - belowB) - (t - belowT);
         dR += dAj * tbl.encoding.weight(k, j);
 
-        int newMask = maskArr[g] ^ ((1 << t) | (1 << b));
-        return pack(rArr[g] + dR, blankRank(newMask, t));
+        return rArr[g] + dR;
     }
 
     @Override
-    int heuristicAfterMove(int t) {
-        int b = blank;
-        int v = board[t];
-        int g = tileGroup[v], j = tileSlot[v];
-
-        long nd = passiveDelta(pos, rG, maskG, g, j, t, b);
-        int hv =
-                directHeuristic
-                        + (tbl.tables[g][blankRankOf(nd)][rankOf(nd)] & 0xFF)
-                        - (tbl.tables[g][qG[g]][rG[g]] & 0xFF);
-
+    void prepareValues(Move move) {
+        int g = tileGroup[move.tile], j = tileSlot[move.tile];
+        move.group = g;
+        move.oldIndex = rG[g];
+        move.index = rankAfterMove(pos, rG, g, j, move.to, move.from);
+        move.oldValue = values[g];
+        int newMask = maskG[g] ^ ((1 << move.to) | (1 << move.from));
+        move.value = tbl.distance(g, move.index, newMask, move.to);
+        move.direct = directHeuristic + move.value - move.oldValue;
+        move.symmetric = symmetricHeuristic;
         if (symmetric) {
-            int sv = symPerm[v];
-            int gs = tileGroup[sv], js = tileSlot[sv];
-            int tb = transpose[b], tt = transpose[t];
-            long ns = passiveDelta(posSym, rS, maskS, gs, js, tt, tb);
-            int hs2 =
-                    symmetricHeuristic
-                            + (tbl.tables[gs][blankRankOf(ns)][rankOf(ns)] & 0xFF)
-                            - (tbl.tables[gs][qS[gs]][rS[gs]] & 0xFF);
-            if (hs2 > hv) {
-                hv = hs2;
-            }
+            int v = symPerm[move.tile];
+            int gs = tileGroup[v], js = tileSlot[v];
+            int from = transpose[move.from], to = transpose[move.to];
+            move.symmetricGroup = gs;
+            move.oldSymmetricIndex = rS[gs];
+            move.symmetricIndex = rankAfterMove(posSym, rS, gs, js, to, from);
+            move.oldSymmetricValue = symmetricValues[gs];
+            int newSymmetricMask = maskS[gs] ^ ((1 << to) | (1 << from));
+            move.symmetricValue = tbl.distance(gs, move.symmetricIndex, newSymmetricMask, to);
+            move.symmetric += move.symmetricValue - move.oldSymmetricValue;
         }
-        return hv;
     }
 
     @Override
-    void apply(int t) {
-        int b = blank;
-        int v = board[t];
-        int g = tileGroup[v], j = tileSlot[v];
-
-        // 先算直链上被移动数字块所属组的新编码和表值
-        long nd = passiveDelta(pos, rG, maskG, g, j, t, b);
-        int nR = rankOf(nd), nQ = blankRankOf(nd);
-        directHeuristic += (tbl.tables[g][nQ][nR] & 0xFF) - (tbl.tables[g][qG[g]][rG[g]] & 0xFF);
-        rG[g] = nR;
-        qG[g] = nQ;
-        maskG[g] ^= (1 << t) | (1 << b);
-
-        // 其余组的排名和表值不变，只用位图重算空格序号
-        for (int gg = 0; gg < rG.length; gg++) {
-            if (gg != g) {
-                qG[gg] = blankRank(maskG[gg], t);
-            }
-        }
-
-        pos[v] = b;
-
+    void updateValues(Move move, boolean undo) {
+        rG[move.group] = undo ? move.oldIndex : move.index;
+        values[move.group] = undo ? move.oldValue : move.value;
+        maskG[move.group] ^= (1 << move.to) | (1 << move.from);
+        pos[move.tile] = undo ? move.to : move.from;
         if (symmetric) {
-            int sv = symPerm[v];
-            int gs = tileGroup[sv], js = tileSlot[sv];
-            int tb = transpose[b], tt = transpose[t];
-            long ns = passiveDelta(posSym, rS, maskS, gs, js, tt, tb);
-            int nRs = rankOf(ns), nQs = blankRankOf(ns);
-            symmetricHeuristic +=
-                    (tbl.tables[gs][nQs][nRs] & 0xFF) - (tbl.tables[gs][qS[gs]][rS[gs]] & 0xFF);
-            rS[gs] = nRs;
-            qS[gs] = nQs;
-            maskS[gs] ^= (1 << tt) | (1 << tb);
-            for (int gg = 0; gg < rS.length; gg++) {
-                if (gg != gs) {
-                    qS[gg] = blankRank(maskS[gg], tt);
-                }
-            }
-            posSym[sv] = tb;
+            rS[move.symmetricGroup] = undo ? move.oldSymmetricIndex : move.symmetricIndex;
+            symmetricValues[move.symmetricGroup] =
+                    undo ? move.oldSymmetricValue : move.symmetricValue;
+            maskS[move.symmetricGroup] ^= (1 << transpose[move.to]) | (1 << transpose[move.from]);
+            posSym[symPerm[move.tile]] = transpose[undo ? move.to : move.from];
         }
-
-        swapBlank(t);
     }
 }
