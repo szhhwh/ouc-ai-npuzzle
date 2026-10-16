@@ -1,6 +1,7 @@
 package stud.solver;
 
 import core.problem.Problem;
+import core.problem.State;
 import core.solver.algorithm.heuristic.Predictor;
 import core.solver.algorithm.searcher.AbstractSearcher;
 import core.solver.queue.Frontier;
@@ -20,6 +21,8 @@ public class IdAStar extends AbstractSearcher {
 
     // 对状态做启发式估值的预测器
     private final Predictor predictor;
+    private final Predictor rootPredictor;
+    private State goalState;
 
     // 找到的目标结点，非 null 表示已找到解
     private Node goalNode;
@@ -27,6 +30,11 @@ public class IdAStar extends AbstractSearcher {
     public IdAStar(Frontier frontier, Predictor predictor) {
         super(frontier);
         this.predictor = predictor;
+        rootPredictor =
+                (state, goal) -> {
+                    goalState = goal;
+                    return predictor.heuristics(state, goal);
+                };
     }
 
     /**
@@ -49,7 +57,7 @@ public class IdAStar extends AbstractSearcher {
         }
 
         // 根结点的 h 值就是初始界限
-        Node root = problem.root(predictor);
+        Node root = problem.root(rootPredictor);
         int bound = root.getHeuristic();
 
         while (true) {
@@ -100,9 +108,15 @@ public class IdAStar extends AbstractSearcher {
         // 当前状态加入路径集合，子孙再绕回它就是成环，会被剪掉
         explored.add(node.getState());
 
-        List<Node> children = problem.childNodes(node, predictor);
+        List<Node> children = problem.childNodes(node);
         // 计数口径同 BestFirstSearcher：生成的子结点都计数，不论随后是否被剪掉
         nodesGenerated += children.size();
+        // Reject path cycles before evaluating them; use the same child list throughout.
+        for (int i = children.size() - 1; i >= 0; i--) {
+            Node child = children.get(i);
+            if (explored.contains(child.getState())) children.remove(i);
+            else child.setHeuristic(predictor, goalState);
+        }
 
         // 子结点按 f 升序排列后再深入。顺序不影响最优性，但先走 f 小的分支通常能更早命中目标
         for (int i = 1; i < children.size(); i++) {
@@ -117,11 +131,6 @@ public class IdAStar extends AbstractSearcher {
 
         int min = INFINITY; // 本子树的下一层界限
         for (Node child : children) {
-            // 环检测只针对当前路径上的状态，跨分支的重复状态允许重访
-            if (explored.contains(child.getState())) {
-                continue;
-            }
-
             int t = dfs(problem, child, bound);
             if (goalNode != null) {
                 // 已找到目标，下一层界限没有意义，逐层返回
