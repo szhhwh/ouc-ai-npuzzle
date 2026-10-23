@@ -5,11 +5,8 @@ import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 
 /** Shared file header and I/O; each PDB supplies its own payload layout. */
@@ -19,9 +16,7 @@ final class PdbCache {
     enum Format {
         PRODUCT(0x50444231, 1 << 16, "PDB"), // ASCII "PDB1"
         RANKED(0x52444231, 1 << 20, "RPDB"), // ASCII "RDB1"
-        RANKED_MIN(0x52444D31, 1 << 20, "RPDB"), // ASCII "RDM1"
         DIRECT(0x50444432, 1 << 20, "PDB"),
-        COMPONENT(0x50444332, 1 << 20, "PDB"),
         COMPONENT_LE(0x50444333, 1 << 20, "PDB");
 
         final int magic;
@@ -66,24 +61,6 @@ final class PdbCache {
                 new DataInputStream(
                         new BufferedInputStream(Files.newInputStream(file), format.bufferSize))) {
             return matchesHeader(in) ? payload.read(in) : null;
-        } catch (IOException | RuntimeException e) {
-            return null;
-        }
-    }
-
-    /** Read-only legacy views let conversion retain only the new representation on heap. */
-    ByteBuffer[] mappedBlocks(int blocks, int ranks) {
-        try (DataInputStream in = new DataInputStream(Files.newInputStream(file));
-                FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
-            if (!matchesHeader(in) || in.readInt() != blocks || in.readInt() != ranks) return null;
-            long offset = 24L + goalCells.length + 4L * tiles.length;
-            if (channel.size() != offset + (long) blocks * ranks) return null;
-            ByteBuffer[] result = new ByteBuffer[blocks];
-            for (int q = 0; q < blocks; q++)
-                result[q] =
-                        channel.map(
-                                FileChannel.MapMode.READ_ONLY, offset + (long) q * ranks, ranks);
-            return result;
         } catch (IOException | RuntimeException e) {
             return null;
         }

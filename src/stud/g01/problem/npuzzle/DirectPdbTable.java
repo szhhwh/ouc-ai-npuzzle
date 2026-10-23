@@ -56,7 +56,7 @@ final class DirectPdbTable {
                             return new DirectPdbTable(indices, vectors, tiles);
                         });
         if (loaded != null) return loaded;
-        byte[][] ranked = RankedPdbHeuristic.loadOrBuildGroup(size, goal, tiles, group, false);
+        byte[][] ranked = RankedPdbHeuristic.loadOrBuildGroup(size, goal, tiles, group);
         RankedPdbEncoding encoding = new RankedPdbEncoding(size * size, tiles.length);
         int[] positions = new int[tiles.length];
         boolean[] used = new boolean[size * size];

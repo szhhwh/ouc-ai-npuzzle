@@ -67,35 +67,7 @@ final class ComponentPdbTable {
                         tiles);
         ComponentPdbTable loaded = readCache(cache, tiles.length, ByteOrder.LITTLE_ENDIAN);
         if (loaded != null) return loaded;
-        loaded =
-                readCache(
-                        new PdbCache(
-                                "component-" + signature + ".bin",
-                                PdbCache.Format.COMPONENT,
-                                size,
-                                goal,
-                                tiles),
-                        tiles.length,
-                        ByteOrder.BIG_ENDIAN);
-        if (loaded == null) {
-            RankedPdbEncoding encoding = new RankedPdbEncoding(16, tiles.length);
-            PdbCache legacy =
-                    new PdbCache(
-                            "ranked-" + signature + ".bin",
-                            PdbCache.Format.RANKED,
-                            size,
-                            goal,
-                            tiles);
-            ByteBuffer[] blocks =
-                    legacy.mappedBlocks(16 - tiles.length, encoding.rankCount(tiles.length));
-            if (blocks == null) {
-                byte[][] built =
-                        RankedPdbHeuristic.loadOrBuildGroup(size, goal, tiles, group, false);
-                blocks = new ByteBuffer[built.length];
-                for (int i = 0; i < blocks.length; i++) blocks[i] = ByteBuffer.wrap(built[i]);
-            }
-            loaded = fromBlocks(tiles.length, blocks);
-        }
+        loaded = fromExactTables(tiles.length, RankedPdbBuilder.build(size, goal, tiles));
         ComponentPdbTable table = loaded;
         cache.tryWrite(
                 out -> {
@@ -157,7 +129,7 @@ final class ComponentPdbTable {
         }
     }
 
-    static ComponentPdbTable fromBlocks(int k, ByteBuffer[] blocks) {
+    static ComponentPdbTable fromExactTables(int k, byte[][] blocks) {
         ComponentPdbTable result = new ComponentPdbTable(k);
         RankedPdbEncoding encoding = new RankedPdbEncoding(16, k);
         int[] positions = new int[k], ids = new int[result.permutations];
@@ -184,7 +156,7 @@ final class ComponentPdbTable {
                 int rank = encoding.rankTuple(positions, k);
                 long vector = 0;
                 for (int c = 0; c < components; c++)
-                    vector |= (long) (blocks[ordinals[c]].get(rank) & 255) << (8 * c);
+                    vector |= (long) (blocks[ordinals[c]][rank] & 255) << (8 * c);
                 long key = vector + 1;
                 int slot = (int) ((key * 0x9E3779B97F4A7C15L) >>> 48);
                 while (keys[slot] != 0 && keys[slot] != key) slot = (slot + 1) & (keys.length - 1);

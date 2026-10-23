@@ -4,7 +4,6 @@ import static stud.g01.problem.npuzzle.RankedPdbEncoding.blankRank;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.BitSet;
 
 /** BFS over zero-cost blank components; each remaining edge moves a pattern tile. */
 final class RankedPdbBuilder {
@@ -13,11 +12,10 @@ final class RankedPdbBuilder {
     private final int[][] neighbors;
     private final RankedPdbEncoding encoding;
     private final byte[][] distances;
-    private final BitSet[] visited;
     private final int[] components;
     private final IntQueue queue = new IntQueue();
 
-    private RankedPdbBuilder(int size, int k, boolean minBlank) {
+    private RankedPdbBuilder(int size, int k) {
         cells = size * size;
         this.k = k;
         blankBits = Integer.SIZE - Integer.numberOfLeadingZeros(cells - k - 1);
@@ -25,18 +23,14 @@ final class RankedPdbBuilder {
         neighbors = PuzzleNeighbors.forSize(size);
         encoding = new RankedPdbEncoding(cells, k);
         int ranks = encoding.rankCount(k);
-        distances = new byte[minBlank ? 1 : cells - k][ranks];
+        distances = new byte[cells - k][ranks];
         for (byte[] block : distances) Arrays.fill(block, (byte) 0xFF);
-        visited = minBlank ? new BitSet[cells - k] : null;
-        if (visited != null) {
-            for (int q = 0; q < visited.length; q++) visited[q] = new BitSet(ranks);
-        }
         // At most 4 MiB for 4 x 4, shared by all ranks with the same occupancy mask.
         components = new int[(1 << cells) * cells];
     }
 
-    static byte[][] build(int size, byte[] goal, int[] tiles, boolean minBlank) {
-        return new RankedPdbBuilder(size, tiles.length, minBlank).build(goal, tiles);
+    static byte[][] build(int size, byte[] goal, int[] tiles) {
+        return new RankedPdbBuilder(size, tiles.length).build(goal, tiles);
     }
 
     private byte[][] build(byte[] goal, int[] tiles) {
@@ -81,16 +75,13 @@ final class RankedPdbBuilder {
 
     private void enqueue(int rank, int occupied, int blank, int depth) {
         int q = blankRank(occupied, blank);
-        if (visited == null ? distances[q][rank] != (byte) 0xFF : visited[q].get(rank)) return;
+        if (distances[q][rank] != (byte) 0xFF) return;
         int reachable = component(occupied, blank);
         for (int bits = reachable; bits != 0; bits &= bits - 1) {
             int b = Integer.numberOfTrailingZeros(bits);
             int ordinal = blankRank(occupied, b);
-            if (visited == null) distances[ordinal][rank] = (byte) depth;
-            else visited[ordinal].set(rank);
+            distances[ordinal][rank] = (byte) depth;
         }
-        // Layers are processed in order, so the first component fixes the minimum over blanks.
-        if (visited != null && distances[0][rank] == (byte) 0xFF) distances[0][rank] = (byte) depth;
         // The largest supported group uses 29 rank bits + 3 blank bits, including the sign bit.
         queue.add((rank << blankBits) | q);
     }
