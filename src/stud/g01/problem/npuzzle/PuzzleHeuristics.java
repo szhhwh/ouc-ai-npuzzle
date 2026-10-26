@@ -24,7 +24,7 @@ public final class PuzzleHeuristics {
 
     private PuzzleHeuristics() {}
 
-    /** 按类型取启发函数，未注册的类型返回 null。普通 PDB 使用乘积编码，3 阶分组为 3-3-2，4 阶为 6-6-3。 */
+    /** 按类型取启发函数，未注册的类型返回 null。PDB 的 3 阶使用乘积编码 3-3-2，4 阶使用排名编码 6-6-3。 */
     public static Predictor predictor(HeuristicType type) {
         return predictors.get(type);
     }

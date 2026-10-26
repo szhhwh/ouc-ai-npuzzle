@@ -36,6 +36,17 @@ public class NPuzzleProblem extends Problem {
         PuzzleBoard init = (PuzzleBoard) initialState;
         PuzzleBoard goalBoard = (PuzzleBoard) goal;
         int n = init.size();
+        if (n <= 4) {
+            // Every move flips both full-permutation parity and blank-square colour.
+            int initialColour = init.blank() / n + init.blank() % n;
+            int goalColour = goalBoard.blank() / n + goalBoard.blank() % n;
+            return ((init.permutationParity()
+                                    ^ goalBoard.permutationParity()
+                                    ^ initialColour
+                                    ^ goalColour)
+                            & 1)
+                    == 0;
+        }
 
         // rank[v] 是数字 v 在目标盘面中的排名
         int[] rank = new int[n * n];

@@ -4,9 +4,6 @@ import java.util.Arrays;
 
 /** Partial permutation ranks and blank ordinals used by ranked PDBs. */
 final class RankedPdbEncoding {
-    private static final int BLANK_BITS = 6;
-    private static final long BLANK_MASK = (1L << BLANK_BITS) - 1;
-
     private final int cells;
     final int maxTiles;
     private final int[][] permutations;
@@ -35,27 +32,16 @@ final class RankedPdbEncoding {
     }
 
     int rankTuple(int[] positions, int k) {
-        int rank = 0;
+        int rank = 0, occupied = 0;
         for (int i = 0; i < k; i++) {
-            int below = 0;
-            for (int j = 0; j < i; j++) {
-                if (positions[j] < positions[i]) below++;
-            }
+            int below = Integer.bitCount(occupied & ((1 << positions[i]) - 1));
             rank += (positions[i] - below) * weight(k, i);
+            occupied |= 1 << positions[i];
         }
         return rank;
     }
 
     /** Blank ordinal among positions not occupied by this group. */
-    static int blankRank(int[] positions, int k, int blank) {
-        int below = 0;
-        for (int i = 0; i < k; i++) {
-            if (positions[i] < blank) below++;
-        }
-        return blank - below;
-    }
-
-    /** The same ordinal, computed from an incrementally maintained bitmap. */
     static int blankRank(int occupied, int blank) {
         return blank - Integer.bitCount(occupied & ((1 << blank) - 1));
     }
@@ -79,17 +65,5 @@ final class RankedPdbEncoding {
             if (!used[pos] && blankRank-- == 0) return pos;
         }
         return -1;
-    }
-
-    static long pack(int rank, int blankRank) {
-        return ((long) rank << BLANK_BITS) | blankRank;
-    }
-
-    static int rankOf(long code) {
-        return (int) (code >>> BLANK_BITS);
-    }
-
-    static int blankRankOf(long code) {
-        return (int) (code & BLANK_MASK);
     }
 }

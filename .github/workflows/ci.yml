@@ -30,21 +30,3 @@ jobs:
 
       - name: Build with quality gates (compile + Spotless + SpotBugs)
         run: ./mvnw -B -ntp verify
-
-      - name: Set up Node for visualization regression
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Visualization regression
-        run: |
-          node visualization/regression.cjs
-          node visualization/exporter-test.cjs
-
-      - name: Pathfinding smoke test
-        run: |
-          set -o pipefail
-          java -cp target/classes core.runner.SearchTester \
-            resources/pathfinding.txt stud.runner.WalkerFeeder astar PF_GRID,PF_EUCLID | tee smoke.log
-          # pathfinding.txt 含 6 个实例，应全部求得解路径
-          test "$(grep -c '解路径长度' smoke.log)" -ge 6

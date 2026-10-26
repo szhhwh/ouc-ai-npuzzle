@@ -15,7 +15,9 @@ final class PdbCache {
 
     enum Format {
         PRODUCT(0x50444231, 1 << 16, "PDB"), // ASCII "PDB1"
-        RANKED(0x52444231, 1 << 20, "RPDB"); // ASCII "RDB1"
+        RANKED(0x52444231, 1 << 20, "RPDB"), // ASCII "RDB1"
+        DIRECT(0x50444432, 1 << 20, "PDB"),
+        COMPONENT_LE(0x50444333, 1 << 20, "PDB");
 
         final int magic;
         final int bufferSize;

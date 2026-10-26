@@ -18,11 +18,12 @@ public class PuzzleBoard extends State {
     private final int size;
     // 空格位置的线性下标
     private final int blank;
-    // 盘面编码：每格数字占 4 个 bit，首格在最高位，4 阶 16 格正好占满一个 long。
-    // next 增量构造新盘面时直接改这个编码，避免全盘重扫，所以必须保留成 long。
+    // Three/four-by-four uses inverse encoding (nibble v is tile v's position), allowing
+    // PDB queries to reuse it. Other small boards retain row-major encoding.
     private final long code;
     // 是否可以用 code 无损表示全部格子
-    private final boolean packed;
+    // Bit 0: packed; bit 1: parity of the full permutation, including the blank.
+    private final byte flags;
     // 小盘面折叠 code，大盘面使用完整数组计算哈希
     private final int hash;
 
@@ -38,27 +39,34 @@ public class PuzzleBoard extends State {
 
         // 一次扫描同时算出空格位置和盘面编码
         long h = 0;
+        long inverse = 0;
+        int parity = 0, seen = 0;
         int b = -1;
         boolean fits = this.cells.length <= Long.SIZE / 4;
         for (int i = 0; i < this.cells.length; i++) {
             h = (h << 4) | this.cells[i];
+            if (size == 3 || size == 4) inverse |= (long) i << (this.cells[i] * 4);
             fits &= this.cells[i] >= 0 && this.cells[i] <= 15;
+            if (this.cells.length <= 16) {
+                parity ^= Integer.bitCount(seen >>> this.cells[i]) & 1;
+                seen |= 1 << this.cells[i];
+            }
             if (this.cells[i] == 0) b = i;
         }
-        this.code = h;
-        this.packed = fits;
+        this.code = size == 3 || size == 4 ? inverse : h;
+        this.flags = (byte) ((fits ? 1 : 0) | (parity << 1));
         this.blank = b;
-        this.hash = packed ? fold(h) : Arrays.hashCode(this.cells);
+        this.hash = fits ? fold(code) : Arrays.hashCode(this.cells);
     }
 
     /** 后继状态直接接管已复制的数组，复用编码方式和已知空格位置。 */
-    private PuzzleBoard(byte[] cells, int size, int blank, long code, boolean packed) {
+    private PuzzleBoard(byte[] cells, int size, int blank, long code, byte flags) {
         this.cells = cells;
         this.size = size;
         this.blank = blank;
         this.code = code;
-        this.packed = packed;
-        this.hash = packed ? fold(code) : Arrays.hashCode(cells);
+        this.flags = flags;
+        this.hash = (flags & 1) != 0 ? fold(code) : Arrays.hashCode(cells);
     }
 
     /**
@@ -89,6 +97,14 @@ public class PuzzleBoard extends State {
      */
     public byte[] cells() {
         return cells;
+    }
+
+    long positions() {
+        return code;
+    }
+
+    int permutationParity() {
+        return (flags >>> 1) & 1;
     }
 
     /** 在控制台按行打印盘面，空格显示为 # */
@@ -131,17 +147,22 @@ public class PuzzleBoard extends State {
         newCells[blank] = v;
         newCells[target] = 0;
 
-        if (!packed) {
-            return new PuzzleBoard(newCells, size, target, 0, false);
+        if ((flags & 1) == 0) {
+            return new PuzzleBoard(newCells, size, target, 0, (byte) 0);
         }
 
-        // 增量更新编码：把数字块 v 从 target 搬到 blank（原值为 0）。
-        // 位置 i 的 4bit 段从第 4*(length-1-i) 位开始，新空格位置就是 target。
-        long newCode =
-                code
-                        + ((long) v << (4 * (cells.length - 1 - blank)))
-                        - ((long) v << (4 * (cells.length - 1 - target)));
-        return new PuzzleBoard(newCells, size, target, newCode, true);
+        long newCode;
+        if (size == 3 || size == 4) {
+            // Exchange the inverse encoding's blank and moving-tile positions.
+            long difference = blank ^ target;
+            newCode = code ^ difference ^ (difference << (v * 4));
+        } else {
+            newCode =
+                    code
+                            + ((long) v << (4 * (cells.length - 1 - blank)))
+                            - ((long) v << (4 * (cells.length - 1 - target)));
+        }
+        return new PuzzleBoard(newCells, size, target, newCode, (byte) (flags ^ 2));
     }
 
     // 四个方向的动作列表，actions() 直接返回，不做分配
@@ -167,7 +188,7 @@ public class PuzzleBoard extends State {
             return false;
         }
         // 只有编码无损时才能省掉逐格比较；更大的盘面必须比较完整数组。
-        if (packed && another.packed) {
+        if ((flags & another.flags & 1) != 0) {
             return code == another.code;
         }
         return Arrays.equals(cells, another.cells);

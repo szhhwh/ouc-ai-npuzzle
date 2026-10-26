@@ -6,7 +6,7 @@ import core.solver.queue.Node;
 import java.util.Arrays;
 import java.util.Deque;
 
-/** N-Puzzle 的增量 PDB IDA*。3 阶使用乘积编码 3-3-2，4 阶使用排名编码 7-8。 */
+/** N-Puzzle 的增量 PDB IDA*。3 阶使用乘积编码 3-3-2，4 阶使用无损连通分量编码 7-8。 */
 public final class NPuzzleIdaStar extends AbstractSearcher {
 
     /** f 值的正无穷哨兵，dfs 返回它表示本子树没有因 f 超过界限而被剪枝的结点 */
@@ -14,6 +14,9 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
     /** dfs 深度上限，取值比 4 阶 15-Puzzle 的状态空间直径 80 略大 */
     private static final int MAX_DEPTH = 88;
+
+    private final Transpositions transpositions = new Transpositions();
+    private Workspace workspace;
 
     /** 增量搜索自行维护当前路径，不使用框架的 Frontier。 */
     public NPuzzleIdaStar() {
@@ -44,13 +47,14 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         PdbContext context =
                 switch (initial.size()) {
                     case 3 -> new ProductPdbContext(initial, DisjointPdbHeuristic.tablesFor(goal));
-                    case 4 -> new RankedPdbContext(initial, RankedPdbHeuristic.tablesFor(goal));
+                    case 4 -> new ComponentPdbContext(initial, ComponentPdbContext.tablesFor(goal));
                     default ->
                             throw new UnsupportedOperationException(
                                     initial.size() + " 阶未定义增量 PDB（仅支持 3/4 阶）");
                 };
-        Search search = new Search(context);
-        search.run(permutationParity(initial.cells()) ^ permutationParity(goal.cells()));
+        if (workspace == null) workspace = new Workspace();
+        Search search = new Search(context, transpositions, workspace);
+        search.run(initial.permutationParity() ^ goal.permutationParity());
 
         nodesGenerated = search.generated;
         nodesExpanded = search.expanded;
@@ -91,18 +95,37 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         return PuzzleMove.RIGHT;
     }
 
+    private static final class Workspace {
+        final int[] moves = new int[MAX_DEPTH];
+        final PdbContext.Move[][] candidates = new PdbContext.Move[MAX_DEPTH][];
+        final LongHashSet pathSet = new LongHashSet(512);
+    }
+
     /** 一次搜索的遍历状态；盘面和启发值由 context 管理。 */
-    private static final class Search {
+    static final class Search {
         private final PdbContext context;
-        private final int[] moves = new int[MAX_DEPTH];
-        private final int[][] tBuf = new int[MAX_DEPTH][4];
-        private final int[][] fBuf = new int[MAX_DEPTH][4];
-        private final LongHashSet pathSet = new LongHashSet(512);
-        private int[] foundMoves;
+        private final int[] moves;
+        private final PdbContext.Move[][] candidates;
+        private final LongHashSet pathSet;
+        private final Transpositions transpositions;
+        private boolean cacheActive;
+        int[] foundMoves;
         private int generated, expanded;
 
         Search(PdbContext context) {
+            this(context, new Transpositions());
+        }
+
+        Search(PdbContext context, Transpositions transpositions) {
+            this(context, transpositions, new Workspace());
+        }
+
+        Search(PdbContext context, Transpositions transpositions, Workspace workspace) {
             this.context = context;
+            this.transpositions = transpositions;
+            moves = workspace.moves;
+            candidates = workspace.candidates;
+            pathSet = workspace.pathSet;
         }
 
         /** 奇偶对齐的迭代加深主体。返回时 foundMoves 非 null 表示找到最优解，空数组表示初始即目标 */
@@ -112,7 +135,8 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             int bound = ((h0 ^ parity) & 1) != 0 ? h0 + 1 : h0;
 
             while (foundMoves == null) {
-                int nextBound = dfs(0, bound);
+                if (cacheActive) transpositions.clear();
+                int nextBound = cacheActive ? dfsGraph(0, bound, -1) : dfsTree(0, bound, -1);
                 if (nextBound == INFINITY) {
                     return; // 搜遍全树仍未找到目标，可解性已经检查过，实际不会走到这里
                 }
@@ -126,56 +150,113 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
          *
          * @param depth 当前深度
          * @param bound 本轮迭代的 f 值上限
+         * @param previousBlank 上一步的空格位置，用于跳过立即反向移动
          * @return 本子树中被剪枝结点的最小 f 值
          */
-        private int dfs(int depth, int bound) {
-            int f = depth + context.heuristic();
-            if (f > bound) {
-                return f;
+        private int dfsTree(int depth, int bound, int previousBlank) {
+            if (!cacheActive && expanded >= 4096) {
+                transpositions.allocate();
+                transpositions.clear();
+                cacheActive = true;
             }
+            if (cacheActive) return dfsGraph(depth, bound, previousBlank);
+            // The root bound covers h(root); every child was already checked before apply.
             if (context.isGoal()) {
                 foundMoves = Arrays.copyOf(moves, depth);
                 return INFINITY;
             }
             expanded++;
-
-            // 当前状态加入路径集合，回溯时再移除
             pathSet.add(context.code);
-
-            // 生成全部合法子结点并计算 f，方向顺序固定，供插入排序保持稳定
-            int[] ts = tBuf[depth];
-            int[] fs = fBuf[depth];
-            int n = 0;
+            PdbContext.Move[] level = candidates[depth];
+            if (level == null) {
+                level = new PdbContext.Move[4];
+                for (int i = 0; i < level.length; i++) level[i] = new PdbContext.Move();
+                candidates[depth] = level;
+            }
+            int n = 0, min = INFINITY;
             for (int t : context.neighbors[context.blank]) {
                 generated++;
-                ts[n] = t;
-                fs[n] = depth + 1 + context.heuristicAfterMove(t);
+                if (t == previousBlank) continue;
+                long childCode = context.codeAfterMove(t);
+                if (pathSet.contains(childCode)) continue;
+                int childF = depth + 1 + context.prepare(t, childCode, level[n], bound - depth - 1);
+                if (childF > bound) {
+                    min = Math.min(min, childF);
+                    continue;
+                }
                 n++;
             }
             for (int i = 1; i < n; i++) {
-                int kt = ts[i], kf = fs[i], j = i - 1;
-                while (j >= 0 && fs[j] > kf) {
-                    ts[j + 1] = ts[j];
-                    fs[j + 1] = fs[j];
+                PdbContext.Move candidate = level[i];
+                int j = i - 1;
+                while (j >= 0 && level[j].heuristic > candidate.heuristic) {
+                    level[j + 1] = level[j];
                     j--;
                 }
-                ts[j + 1] = kt;
-                fs[j + 1] = kf;
+                level[j + 1] = candidate;
             }
-
-            int min = INFINITY;
             for (int i = 0; i < n; i++) {
-                int t = ts[i];
-                int from = context.blank;
-                // 先用编码增量算出子结点的键做环检测，命中路径内已有状态就跳过，省掉一次 apply 和撤销
+                PdbContext.Move move = level[i];
+                context.apply(move);
+                moves[depth] = move.to;
+                int result = dfsTree(depth + 1, bound, move.from);
+                context.undo(move);
+                if (foundMoves != null) {
+                    pathSet.remove(context.code);
+                    return INFINITY;
+                }
+                min = Math.min(min, result);
+            }
+            pathSet.remove(context.code);
+            return min;
+        }
+
+        /** Once activated, best-g pruning replaces the second path hash entirely. */
+        private int dfsGraph(int depth, int bound, int previousBlank) {
+            if (context.isGoal()) {
+                foundMoves = Arrays.copyOf(moves, depth);
+                return INFINITY;
+            }
+            if (transpositions.visit(context.code, depth)) return INFINITY;
+            expanded++;
+
+            // Count all legal moves as before, but only estimate acyclic candidates.
+            PdbContext.Move[] level = candidates[depth];
+            if (level == null) {
+                level = new PdbContext.Move[4];
+                for (int i = 0; i < level.length; i++) level[i] = new PdbContext.Move();
+                candidates[depth] = level;
+            }
+            int n = 0;
+            int min = INFINITY;
+            for (int t : context.neighbors[context.blank]) {
+                generated++;
+                if (t == previousBlank) continue;
                 long childCode = context.codeAfterMove(t);
-                if (pathSet.contains(childCode)) {
+                if (transpositions.dominated(childCode, depth + 1)) continue;
+                int childF = depth + 1 + context.prepare(t, childCode, level[n], bound - depth - 1);
+                if (childF > bound) {
+                    min = Math.min(min, childF);
                     continue;
                 }
-                context.apply(t);
-                moves[depth] = t;
-                int r = dfs(depth + 1, bound);
-                context.apply(from); // 撤销移动，盘面、编码和启发值全部复原
+                n++;
+            }
+            for (int i = 1; i < n; i++) {
+                PdbContext.Move candidate = level[i];
+                int j = i - 1;
+                while (j >= 0 && level[j].heuristic > candidate.heuristic) {
+                    level[j + 1] = level[j];
+                    j--;
+                }
+                level[j + 1] = candidate;
+            }
+
+            for (int i = 0; i < n; i++) {
+                PdbContext.Move move = level[i];
+                context.apply(move);
+                moves[depth] = move.to;
+                int r = dfsGraph(depth + 1, bound, move.from);
+                context.undo(move);
                 if (foundMoves != null) {
                     return INFINITY; // 已找到目标，下一层界限没有意义，直接逐层返回
                 }
@@ -184,22 +265,49 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 }
             }
 
-            pathSet.remove(context.code); // 回溯，把当前状态移出路径集合
             return min;
         }
     }
 
-    /** 含空格的完整序列的逆序数奇偶。空格记为 0，是最小的值 */
-    private static int permutationParity(byte[] c) {
-        int inv = 0;
-        for (int i = 0; i < c.length; i++) {
-            for (int j = i + 1; j < c.length; j++) {
-                if (c[i] > c[j]) {
-                    inv++;
-                }
-            }
+    /** Per-iteration best g, with exact keys; collisions only lose pruning opportunities. */
+    private static final class Transpositions {
+        private static final int CAPACITY = 1 << 18;
+        private long[] keys;
+        private byte[] depths;
+
+        void allocate() {
+            if (keys != null) return;
+            keys = new long[CAPACITY];
+            depths = new byte[CAPACITY];
         }
-        return inv & 1;
+
+        void clear() {
+            Arrays.fill(keys, 0);
+        }
+
+        private int slot(long code) {
+            return (int) ((code * 0x9E3779B97F4A7C15L) >>> 47) << 1;
+        }
+
+        boolean dominated(long code, int depth) {
+            int slot = slot(code);
+            return (keys[slot] == code && depths[slot] <= depth)
+                    || (keys[slot + 1] == code && depths[slot + 1] <= depth);
+        }
+
+        boolean visit(long code, int depth) {
+            int slot = slot(code);
+            if (keys[slot] != code) {
+                if (keys[slot + 1] == code
+                        || (keys[slot] != 0
+                                && (keys[slot + 1] == 0 || depths[slot + 1] > depths[slot])))
+                    slot++;
+            }
+            if (keys[slot] == code && depths[slot] <= depth) return true;
+            keys[slot] = code;
+            depths[slot] = (byte) depth;
+            return false;
+        }
     }
 
     /** 固定容量的链地址哈希集合，存放当前路径上状态的 64 位编码 */

@@ -25,11 +25,9 @@ public final class DisjointPdbHeuristic {
 
     private static volatile Memo lastMemo;
 
-    /** 各棋盘规模的分组定义。4 阶取 6-6-3：左两列、右两列、底行；3 阶取 3-3-2。某个规模不在表里表示不支持。 */
+    /** Small product tables are retained for 3 x 3; 4 x 4 uses ranked storage. */
     private static final Map<Integer, int[][]> GROUPINGS =
-            Map.of(
-                    4, new int[][] {{1, 2, 5, 6, 9, 10}, {3, 4, 7, 8, 11, 12}, {13, 14, 15}},
-                    3, new int[][] {{1, 2, 3}, {4, 5, 6}, {7, 8}});
+            Map.of(3, new int[][] {{1, 2, 3}, {4, 5, 6}, {7, 8}});
 
     private DisjointPdbHeuristic() {}
 
@@ -39,7 +37,12 @@ public final class DisjointPdbHeuristic {
      * @return 启发函数
      */
     public static Predictor predictor() {
-        return (state, goal) -> tablesFor((PuzzleBoard) goal).hMax((PuzzleBoard) state);
+        return (state, goal) -> {
+            PuzzleBoard target = (PuzzleBoard) goal;
+            return target.size() == 4
+                    ? RegularPdbHeuristic.tablesFor(target).hMax((PuzzleBoard) state)
+                    : tablesFor(target).hMax((PuzzleBoard) state);
+        };
     }
 
     /**
@@ -88,6 +91,8 @@ public final class DisjointPdbHeuristic {
         /** 对称增强是否可用，即 goal 的空格是否在主对角线上 */
         final boolean symmetric;
 
+        final int[] tileGroup, tileWeight, mirroredGroup, mirroredWeight;
+
         private Tables(int size, int[][] groups, byte[][] tables, byte[] goalCells) {
             this.size = size;
             this.cells = size * size;
@@ -110,6 +115,23 @@ public final class DisjointPdbHeuristic {
                 symPerm[v] = goalCells[transpose[goalPos[v]]];
             }
             this.symmetric = symPerm[0] == 0;
+            tileGroup = new int[cells];
+            tileWeight = new int[cells];
+            mirroredGroup = new int[cells];
+            mirroredWeight = new int[cells];
+            for (int g = 0; g < groups.length; g++) {
+                int weight = cells;
+                for (int j = groups[g].length - 1; j >= 0; j--) {
+                    int tile = groups[g][j];
+                    tileGroup[tile] = g;
+                    tileWeight[tile] = weight;
+                    weight *= cells;
+                }
+            }
+            for (int tile = 1; tile < cells; tile++) {
+                mirroredGroup[tile] = tileGroup[symPerm[tile]];
+                mirroredWeight[tile] = tileWeight[symPerm[tile]];
+            }
         }
 
         /** 为 goal 构建整套表。逐组先查磁盘缓存，未命中则用 0-1 BFS 重建并写盘 */
@@ -117,8 +139,7 @@ public final class DisjointPdbHeuristic {
             int size = goal.size();
             int[][] groups = GROUPINGS.get(size);
             if (groups == null) {
-                // 分组只定义了 3 阶和 4 阶
-                throw new UnsupportedOperationException(size + " 阶未定义 PDB 分组（仅支持 3/4 阶）");
+                throw new UnsupportedOperationException("Product PDBs require a 3 x 3 board");
             }
             byte[][] ts = new byte[groups.length][];
             for (int g = 0; g < groups.length; g++) {
@@ -134,19 +155,25 @@ public final class DisjointPdbHeuristic {
 
         /** 对称增强查询，取直接查表和与对称态查表中的较大值；不满足对称条件时退化为直接查询 */
         int hMax(PuzzleBoard state) {
-            int direct = h(state);
-            if (!symmetric) {
-                return direct;
-            }
-
-            // 构造对称态，空格位置也随之转置
-            byte[] c = state.cells();
-            byte[] t = new byte[cells];
-            for (int i = 0; i < cells; i++) {
-                t[i] = (byte) symPerm[c[transpose[i]]];
-            }
-            int mirrored = hCells(t, transpose[state.blank()]);
+            long positions = state.positions();
+            int direct = hPositions(positions, state.blank(), false);
+            if (!symmetric) return direct;
+            int mirrored = hPositions(positions, transpose[state.blank()], true);
             return Math.max(direct, mirrored);
+        }
+
+        private int hPositions(long positions, int blank, boolean mirrored) {
+            int sum = 0;
+            for (int g = 0; g < groups.length; g++) {
+                int index = 0;
+                for (int tile : groups[g]) {
+                    int value = mirrored ? symPerm[tile] : tile;
+                    int p = (int) (positions >>> (value * 4)) & 15;
+                    index = index * cells + (mirrored ? transpose[p] : p);
+                }
+                sum += tables[g][index * cells + blank] & 255;
+            }
+            return sum;
         }
 
         /**
@@ -186,7 +213,7 @@ public final class DisjointPdbHeuristic {
      * @param tiles 该组的数字
      * @param gi 组号，用于命名缓存文件
      */
-    private static byte[] loadOrBuildGroup(int size, byte[] goalCells, int[] tiles, int gi) {
+    static byte[] loadOrBuildGroup(int size, byte[] goalCells, int[] tiles, int gi) {
         PdbCache cache =
                 new PdbCache(
                         "pdb-" + size + "-" + gi + ".bin",

@@ -38,23 +38,61 @@ abstract class PdbContext {
         return directHeuristic == 0;
     }
 
-    /** 预估空格移动到相邻格 target 后的启发值，不修改任何状态。 路径深度和 f 值由搜索器计算。 */
-    abstract int heuristicAfterMove(int target);
+    /** Reused per depth and neighbor: both the prepared child and its undo data. */
+    static final class Move {
+        int from, to, tile, group, symmetricGroup;
+        int oldIndex, index, oldSymmetricIndex, symmetricIndex;
+        int oldValue, value, oldSymmetricValue, symmetricValue;
+        int oldDirect, direct, oldSymmetric, symmetric, heuristic, limit;
+        long oldCode, code;
+    }
 
-    /** 空格移动到相邻格 target，同时更新盘面、编码和全部增量数据。 调用前记录原空格位置；回溯时 apply(原空格位置) 恢复移动前的状态。 */
-    abstract void apply(int target);
+    /** Prepare once, after cycle pruning; applying and undoing never query the PDB. */
+    final int prepare(int target, long childCode, Move move) {
+        return prepare(target, childCode, move, Integer.MAX_VALUE);
+    }
+
+    final int prepare(int target, long childCode, Move move, int limit) {
+        move.from = blank;
+        move.to = target;
+        move.tile = board[target];
+        move.oldCode = code;
+        move.code = childCode;
+        move.oldDirect = directHeuristic;
+        move.oldSymmetric = symmetricHeuristic;
+        move.limit = limit;
+        prepareValues(move);
+        move.heuristic = symmetric ? Math.max(move.direct, move.symmetric) : move.direct;
+        return move.heuristic;
+    }
+
+    abstract void prepareValues(Move move);
+
+    abstract void updateValues(Move move, boolean undo);
+
+    final void apply(Move move) {
+        updateValues(move, false);
+        board[move.from] = (byte) move.tile;
+        board[move.to] = 0;
+        blank = move.to;
+        code = move.code;
+        directHeuristic = move.direct;
+        symmetricHeuristic = move.symmetric;
+    }
+
+    final void undo(Move move) {
+        updateValues(move, true);
+        board[move.to] = (byte) move.tile;
+        board[move.from] = 0;
+        blank = move.from;
+        code = move.oldCode;
+        directHeuristic = move.oldDirect;
+        symmetricHeuristic = move.oldSymmetric;
+    }
 
     /** 预估移动后的编码，不修改盘面，供搜索器做路径环检测。 */
     final long codeAfterMove(int target) {
         byte tile = board[target];
         return code + ((long) tile << shifts[blank]) - ((long) tile << shifts[target]);
-    }
-
-    /** 后端更新启发值和索引后，用此方法统一完成盘面交换。 */
-    final void swapBlank(int target) {
-        code = codeAfterMove(target);
-        board[blank] = board[target];
-        board[target] = 0;
-        blank = target;
     }
 }
