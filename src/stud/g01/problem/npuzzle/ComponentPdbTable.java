@@ -12,11 +12,12 @@ import java.util.Arrays;
  * permutations index a bit-packed palette of vectors.
  */
 final class ComponentPdbTable {
-    private static final byte[][] COMPONENTS = geometry();
+    private static final byte[] COMPONENTS = geometry();
     final int k, permutations;
     private final long[][] codes = new long[1 << 16][];
     private final long[][] palettes = new long[1 << 16][];
     private final byte[] widths = new byte[1 << 16];
+    int maxDistance;
 
     private ComponentPdbTable(int k) {
         this.k = k;
@@ -31,7 +32,7 @@ final class ComponentPdbTable {
         long id = words[word] >>> shift;
         if (shift + width > 64) id |= words[word + 1] << (64 - shift);
         id &= (1L << width) - 1;
-        int component = COMPONENTS[occupied][blank];
+        int component = COMPONENTS[(occupied << 4) | blank];
         return (int) (palettes[occupied][(int) id] >>> (component * 8)) & 255;
     }
 
@@ -115,6 +116,7 @@ final class ComponentPdbTable {
                         table.codes[mask] = new long[words];
                         readLongs(in, table.codes[mask], buffer, longs);
                     }
+                    table.computeMaxDistance();
                     return table;
                 });
     }
@@ -145,7 +147,7 @@ final class ComponentPdbTable {
             int components = 0;
             for (int blank = 0; blank < 16; blank++) {
                 if ((mask & (1 << blank)) != 0) continue;
-                int c = COMPONENTS[mask][blank];
+                int c = COMPONENTS[(mask << 4) | blank];
                 representatives[c] = blank;
                 components = Math.max(components, c + 1);
             }
@@ -180,7 +182,22 @@ final class ComponentPdbTable {
             result.codes[mask] = words;
             result.palettes[mask] = Arrays.copyOf(vectors, count);
         }
+        result.computeMaxDistance();
         return result;
+    }
+
+    private void computeMaxDistance() {
+        int maximum = 0;
+        for (long[] entries : palettes) {
+            if (entries == null) continue;
+            for (long value : entries) {
+                for (int component = 0; component < 8; component++) {
+                    int distance = (int) (value >>> (component * 8)) & 255;
+                    maximum = Math.max(maximum, distance);
+                }
+            }
+        }
+        maxDistance = maximum;
     }
 
     private static boolean nextPermutation(int[] positions) {
@@ -200,12 +217,11 @@ final class ComponentPdbTable {
         return true;
     }
 
-    private static byte[][] geometry() {
-        byte[][] result = new byte[1 << 16][];
+    private static byte[] geometry() {
+        byte[] result = new byte[1 << 20];
         int[][] neighbors = PuzzleNeighbors.forSize(4);
-        for (int occupied = 0; occupied < result.length; occupied++) {
-            byte[] components = new byte[16];
-            result[occupied] = components;
+        for (int occupied = 0; occupied < (1 << 16); occupied++) {
+            int offset = occupied << 4;
             int visited = occupied, c = 0;
             for (int b = 0; b < 16; b++) {
                 if ((visited & (1 << b)) != 0) continue;
@@ -214,7 +230,7 @@ final class ComponentPdbTable {
                 while (pending != 0) {
                     int p = Integer.numberOfTrailingZeros(pending);
                     pending &= pending - 1;
-                    components[p] = (byte) c;
+                    result[offset | p] = (byte) c;
                     for (int n : neighbors[p]) {
                         if ((visited & (1 << n)) != 0) continue;
                         visited |= 1 << n;

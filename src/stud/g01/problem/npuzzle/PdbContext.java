@@ -44,7 +44,25 @@ abstract class PdbContext {
         int oldIndex, index, oldSymmetricIndex, symmetricIndex;
         int oldValue, value, oldSymmetricValue, symmetricValue;
         int oldDirect, direct, oldSymmetric, symmetric, heuristic, limit;
+        int pdbPreparedMask;
         long oldCode, code;
+        int[] groups, oldIndices, indices, oldValues, values;
+        int[] symmetricGroups, oldSymmetricIndices, symmetricIndices;
+        int[] oldSymmetricValues, symmetricValues;
+
+        void ensurePdbCapacity(int count) {
+            if (groups != null && groups.length == count) return;
+            groups = new int[count];
+            oldIndices = new int[count];
+            indices = new int[count];
+            oldValues = new int[count];
+            values = new int[count];
+            symmetricGroups = new int[count];
+            oldSymmetricIndices = new int[count];
+            symmetricIndices = new int[count];
+            oldSymmetricValues = new int[count];
+            symmetricValues = new int[count];
+        }
     }
 
     /** Prepare once, after cycle pruning; applying and undoing never query the PDB. */
