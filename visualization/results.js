@@ -46,7 +46,7 @@ function showImported(index) {
   const record = importedResults[index];
   load(record.data, record.label); updateStudy();
   const data = record.data;
-  $('metrics-note').textContent = `路径合法且与声明目标一致（若提供），不证明最优性。计时：${typeof data.timing === 'string' ? data.timing : '未提供'}；环境：${typeof data.environment === 'string' ? data.environment : '未提供'}；预热 ${Number.isSafeInteger(data.warmupRuns) ? data.warmupRuns : '—'} 轮，测量 ${Number.isSafeInteger(data.measuredRuns) ? data.measuredRuns : '—'} 轮。`;
+  $('metrics-note').textContent = `路径合法且与声明目标一致（若提供），不证明最优性。计时：${typeof data.timing === 'string' ? data.timing : '未提供'}；环境：${typeof data.environment === 'string' ? data.environment : '未提供'}；预热 ${Number.isSafeInteger(data.warmupRuns) ? data.warmupRuns : '—'} 轮，测量 ${Number.isSafeInteger(data.measuredRuns) ? data.measuredRuns : '—'} 轮；源码：${typeof data.sourceRevision === 'string' ? data.sourceRevision : '未提供'}。`;
 }
 function updateStudy() {
   const list = $('moves'); list.replaceChildren();
@@ -93,9 +93,9 @@ function renderCharts(records) {
     const section = document.createElement('section'); const heading = document.createElement('h3'); heading.textContent = title; section.append(heading);
     // Time bars share a scale only with explicit matching measurement provenance.
     const reference = records[0]?.data;
-    const signature = data => JSON.stringify([data.source,data.environment,data.timing,data.warmupRuns,data.measuredRuns]);
+    const signature = data => JSON.stringify([data.source,data.environment,data.timing,data.warmupRuns,data.measuredRuns,data.sourceRevision]);
     const timeCompatible = reference && reference.source === 'Java' && reference.environment && reference.timing === 'wall-median' && Number.isSafeInteger(reference.warmupRuns) && Number.isSafeInteger(reference.measuredRuns) && records.every(({data}) => signature(data) === signature(reference));
-    if (key === 'timeMs' && !timeCompatible) { const note = document.createElement('p'); note.textContent = '耗时图需要相同 Java 环境、墙钟中位数计时及预热/测量轮数；未知口径只保留原始表格，不绘制共尺度图。'; section.append(note); charts.append(section); continue; }
+    if (key === 'timeMs' && !timeCompatible) { const note = document.createElement('p'); note.textContent = '耗时图需要相同 Java 环境、源码标记、墙钟中位数计时及预热/测量轮数；未知口径只保留原始表格，不绘制共尺度图。'; section.append(note); charts.append(section); continue; }
     const values = records.filter(({data}) => Number.isFinite(data[key]));
     const max = Math.max(1,...values.map(({data})=>data[key]));
     for (const {data,label} of values) {
@@ -142,7 +142,7 @@ $('file').onchange = async e => {
 };
 if (window.NPuzzleExamples) {
   for (const [i,data] of window.NPuzzleExamples.results.entries()) {
-    validate(data); const record={data,label:`Java / ${data.name || i+1} / ${data.heuristic || '?'}`};
+    validate(data); const record={data,label:`Java / ${data.name || i+1} / ${data.algorithm || '?'} / ${data.heuristic || '?'}`};
     const option=document.createElement('option'); option.value=importedResults.length; option.textContent=record.label;
     importedResults.push(record); $('result-list').append(option);
   }
