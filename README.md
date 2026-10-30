@@ -90,4 +90,4 @@ n  <n*n 个初始状态数字>  <n*n 个目标状态数字>
 
 ## 网页可视化与实验导出
 
-打开 `visualization/index.html` 可查看解路径播放、实验图表、PDB 分组示意和 A* 教学轨迹。使用 `bash scripts/export-visualization.sh` 导出 Java 求解结果，参数见 [可视化说明](visualization/README.md)。
+打开 `visualization/index.html` 可播放真实 Java A* 搜索过程：权值比较、全局选点、后继剪枝与搜索树。重新录制使用 `bash scripts/export-search-traces.sh 新输出文件.js`，详见 [可视化说明](visualization/README.md)。旧综合面板保留在 `visualization/overview.html`，不发布到 Pages。
