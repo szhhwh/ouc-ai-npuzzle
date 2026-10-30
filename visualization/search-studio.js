@@ -85,16 +85,21 @@
     const list=[...visible].map(id=>nodes.get(id)).filter(n=>$('pruned').checked||!n.status.endsWith('pruned'));
     const byParent=new Map();list.forEach(n=>{if(!byParent.has(n.parent))byParent.set(n.parent,[]);byParent.get(n.parent).push(n);});
     let leaf=0;const coords=new Map();
-    function walk(n){const kids=byParent.get(n.id)||[];kids.forEach(walk);coords.set(n.id,{x:kids.length?kids.reduce((s,k)=>s+coords.get(k.id).x,0)/kids.length:45+leaf++*64,y:35+n.g*68});}
+    function walk(n){const kids=byParent.get(n.id)||[];kids.forEach(walk);coords.set(n.id,{x:kids.length?kids.reduce((s,k)=>s+coords.get(k.id).x,0)/kids.length:54+leaf++*108,y:64+n.g*140});}
     walk(list.find(n=>n.parent===null));
-    const viewport=$('tree-viewport'),width=Math.max(viewport.clientWidth,leaf*64+30),height=Math.max(160,...list.map(n=>35+n.g*68+40));
-    const scale=fit?Math.max(.45,Math.min(1,viewport.clientWidth/width)):1,svg=$('search-tree');
+    const viewport=$('tree-viewport'),naturalWidth=leaf*108,width=Math.max(viewport.clientWidth,naturalWidth),height=Math.max(140,...list.map(n=>64+n.g*140+64));
+    if(width>naturalWidth)coords.forEach(p=>p.x+=(width-naturalWidth)/2);
+    const scale=fit?Math.max(.8,Math.min(1,viewport.clientWidth/width)):1,svg=$('search-tree');
     svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.setAttribute('width',width*scale);svg.setAttribute('height',height*scale);
     const solution=new Set(goal?trace.solution:[]);
-    svg.innerHTML=list.map(n=>{const p=coords.get(n.parent),c=coords.get(n.id);return p?`<path class="tree-link ${solution.has(n.id)&&solution.has(n.parent)?'solution':''}" d="M${p.x},${p.y+17} L${c.x},${c.y-17}"/>`:'';}).join('')+list.map(n=>{const p=coords.get(n.id);return `<g class="tree-node ${!previousTree.has(n.id)?'new-node':''} ${open.has(n.id)?'open':''} ${n.id===current.id?'active':''} ${n.status.endsWith('pruned')?'pruned':''} ${solution.has(n.id)?'solution':''} ${inspected===n.id?'inspect':''}" transform="translate(${p.x},${p.y})" data-node="${n.id}" tabindex="0" role="button" aria-label="节点 ${n.id}，g ${n.g} h ${n.h} f ${n.f}"><title>#${n.id} · g ${n.g} + h ${n.h} = f ${n.f}</title><circle r="18"/><text text-anchor="middle" y="-1">#${n.id}</text><text text-anchor="middle" y="11">f ${n.f}</text></g>`;}).join('');
+    svg.innerHTML=list.map(n=>{const p=coords.get(n.parent),c=coords.get(n.id);return p?`<path class="tree-link ${solution.has(n.id)&&solution.has(n.parent)?'solution':''}" d="M${p.x},${p.y+54} L${c.x},${c.y-54}"/>`:'';}).join('')+list.map(n=>{
+      const p=coords.get(n.id);
+      const cells=n.board.map((v,i)=>`<rect class="state-tile ${v?'':'empty'}" x="${-29+(i%3)*20}" y="${-30+Math.floor(i/3)*20}" width="18" height="18" rx="2"/>${v?`<text class="state-value" text-anchor="middle" x="${-20+(i%3)*20}" y="${-17+Math.floor(i/3)*20}">${v}</text>`:''}`).join('');
+      return `<g class="tree-node ${!previousTree.has(n.id)?'new-node':''} ${open.has(n.id)?'open':''} ${n.id===current.id?'active':''} ${n.status.endsWith('pruned')?'pruned':''} ${solution.has(n.id)?'solution':''} ${inspected===n.id?'inspect':''}" transform="translate(${p.x},${p.y})" data-node="${n.id}" tabindex="0" role="button" aria-label="节点 ${n.id}，棋盘 ${n.board.join(' ')}，g ${n.g} h ${n.h} f ${n.f}"><title>#${n.id} · ${n.board.join(' ')} · g ${n.g} + h ${n.h} = f ${n.f}</title><rect class="state-card" x="-44" y="-54" width="88" height="108" rx="8"/><text class="state-id" text-anchor="middle" y="-39">#${n.id}</text>${cells}<text class="state-cost" text-anchor="middle" y="44">g ${n.g} · h ${n.h} · f ${n.f}</text></g>`;
+    }).join('');
     previousTree=new Set(list.map(n=>n.id));
     if(previousTreeStep!==position&&coords.has(current.id)){
-      const p=coords.get(current.id);viewport.scrollTo({left:Math.max(0,p.x*scale-viewport.clientWidth/2),top:Math.max(0,p.y*scale-viewport.clientHeight/2),behavior:'auto'});
+      const p=coords.get(current.id);viewport.scrollTo({left:Math.max(0,p.x*scale-viewport.clientWidth/2),top:Math.max(0,p.y*scale-viewport.clientHeight/2),behavior:'instant'});
     }
     previousTreeStep=position;
   }
