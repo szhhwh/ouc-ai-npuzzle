@@ -46,7 +46,7 @@
     const words={ready:'f = g + h：已走代价 + 剩余估计。',f:'金色标出最小权值候选。',g:'权值相同，按项目规则比较已走代价。',pick:'从整个 Open 中选择，不限于刚生成的后继。',child:'逐个估值；重复状态按项目规则剪枝。',merge:'保留可用候选，再从全局比较权值。',goal:'金色连线标出最终解路径。'};
     const tied=frame?frame.openBefore.map(id=>nodes.get(id)).filter(n=>n.f===current.f&&n.g===current.g):[];
     if(phase==='pick'&&tied.length>1) words.pick='f、g 均相同：展示 Java 队列本次真实选择。';
-    if(position===shots.length-1&&trace.truncated) words.merge='前 80 轮演示结束；搜索未录完，不代表无解。';
+    if(position===shots.length-1&&trace.truncated) {titles.merge='前 80 轮录制结束 · 非无解';words.merge='前 80 轮演示结束；搜索未录完，不代表无解。';}
     $('headline').textContent=titles[phase]; $('explanation').textContent=words[phase];
     $('shot-tag').textContent=frame?`第 ${shot.round+1} 轮`:'起点';
     document.querySelectorAll('[data-phase]').forEach(el=>el.classList.toggle('active',el.dataset.phase===(phase==='goal'?'pick':phase)));
