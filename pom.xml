@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>ouc.npuzzle</groupId>
+  <artifactId>npuzzle</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>NPuzzle</name>
+  <description>OUC 人工智能课程 N-Puzzle 求解器</description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>25</maven.compiler.release>
+  </properties>
+
+  <build>
+    <!-- 课程项目源码直接位于 src/ 下（algs4/core/stud），保持原目录结构不变 -->
+    <sourceDirectory>src</sourceDirectory>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.14.0</version>
+      </plugin>
+
+      <!-- 代码格式化：仅作用于 stud/**（algs4/core 为教师框架代码，保持原样） -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>3.10.3</version>
+        <configuration>
+          <java>
+            <includes>
+              <include>src/stud/**/*.java</include>
+            </includes>
+            <!-- AOSP 风格 = 4 空格缩进，与课程代码现有缩进一致 -->
+            <googleJavaFormat>
+              <version>1.36.1</version>
+              <style>AOSP</style>
+            </googleJavaFormat>
+            <removeUnusedImports/>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>verify</phase>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- 静态分析：仅分析 stud 包，避免教师框架代码产生噪音 -->
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <version>4.10.4.1</version>
+        <configuration>
+          <effort>Max</effort>
+          <threshold>Medium</threshold>
+          <!-- "stud.-" 表示 stud 包及其全部子包 -->
+          <onlyAnalyze>stud.-</onlyAnalyze>
+          <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+          <failOnError>true</failOnError>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotbugs-check</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>verify</phase>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

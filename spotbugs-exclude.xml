@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- 误报：initialState/goal 由父类 core.problem.Problem 构造函数写入，
+         而 onlyAnalyze 仅覆盖 stud 包，写入点不在分析范围内 -->
+    <Bug pattern="NP_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD">
+        <Class name="stud.problem.pathfinding.PathFinding"/>
+    </Bug>
+    <!-- 设计决策：cells() 返回内部数组引用，避免热路径拷贝；调用方不得修改 -->
+    <Bug pattern="EI_EXPOSE_REP">
+        <Class name="stud.g01.problem.npuzzle.PuzzleBoard"/>
+        <Method name="cells"/>
+    </Bug>
+</FindBugsFilter>

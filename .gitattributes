@@ -1,0 +1,12 @@
+# 统一文本文件行尾为 LF
+* text=auto eol=lf
+
+# Windows 批处理脚本必须保持 CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# PDB 磁盘缓存与常见二进制不做行尾转换
+resources/pdb-cache/** binary
+*.png binary
+*.pdf binary
+*.jar binary
