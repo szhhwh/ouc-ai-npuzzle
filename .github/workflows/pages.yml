@@ -34,7 +34,7 @@ jobs:
       - name: Stage latest website assets only
         run: |
           mkdir -p "${{ runner.temp }}/npuzzle-pages"
-          for asset in index.html style.css study.css app.js results.js examples.js lab-data.js experiment-lab.js search-trace.js search-lab.js; do
+          for asset in index.html overview.html search-studio.css search-studio.js java-search-traces.js app.js examples.js results.js search-lab.js search-trace.js style.css study.css; do
             cp "visualization/$asset" "${{ runner.temp }}/npuzzle-pages/$asset"
           done
       - name: Upload visualization

@@ -1,46 +1,147 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>N-Puzzle · 搜索的每一步</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="study.css">
-</head>
-<body>
-  <header><a class="brand" href="./"><span class="brand-icon">N<span>·</span></span>N-PUZZLE <small>LAB</small></a><span class="course">OUC / 人工智能导论</span><a class="header-link" href="https://github.com/szhhwh/ouc-ai-npuzzle" target="_blank" rel="noreferrer">项目仓库 ↗</a></header>
-  <main>
-    <section class="intro"><div><p class="eyebrow"><span></span> SEARCH ALGORITHM VISUALIZER</p><h1>看见搜索的<span>每一步。</span></h1><p class="subtitle">从无序到有序，把抽象的搜索路径变成清晰的移动轨迹。</p></div><div class="intro-note"><span>01 — PATH EXPLORER</span><p>一个棋盘，一条最优路径。<br>用动画理解 A* 如何抵达目标。</p></div></section>
-    <nav class="section-nav" aria-label="可视化板块"><a href="#experiment-lab">小组实验总览</a><a href="#search-lab">A* 搜索过程</a><a href="#pdb-study">PDB 编码说明</a></nav>
-    <div class="workspace">
-      <section class="board-panel"><div class="panel-top"><span class="panel-label">解路径演示 <span class="tag">8-PUZZLE</span></span><span id="status" class="status">准备就绪</span></div>
-        <div class="board-stage"><span class="stage-caption">INITIAL STATE → GOAL STATE</span><div id="board" class="board" aria-label="数码棋盘"></div><div class="board-caption"><span class="orange-dot"></span><span id="move-label">空格记为留白 · 点击播放，开始探索</span></div></div>
-        <div class="transport"><button id="reset" title="回到起点" aria-label="回到起点">↺</button><button id="prev" title="上一步" aria-label="上一步">←</button><button id="play" class="play">▶ <span>播放路径</span></button><button id="next" title="下一步" aria-label="下一步">→</button><div class="speed"><label for="speed">速度</label><select id="speed"><option value="1000">0.5×</option><option value="500" selected>1×</option><option value="250">2×</option></select></div></div>
-        <div class="timeline"><div class="timeline-label"><span>路径进度</span><span><b id="step">00</b> / <span id="total">21</span> 步</span></div><input id="progress" type="range" min="0" max="21" value="0" aria-label="跳转到指定步数"><div class="timeline-ends"><span>初始状态</span><span id="timeline-end">目标状态</span></div></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>N-Puzzle · A* 算法动画</title>
+    <link rel="stylesheet" href="search-studio.css" />
+  </head>
+  <body class="compact">
+    <header class="masthead">
+      <a class="brand" href="./"
+        >N<span>·</span>PUZZLE <small>算法过程</small></a
+      ><button id="cinema">录屏布局</button>
+    </header>
+    <main>
+      <div class="title-row">
+        <div>
+          <p class="eyebrow">A* / JAVA SEARCH</p>
+          <h1>如何选出<span>下一步？</span></h1>
+        </div>
+        <p class="lead">比较整个 Open 表，不只看相邻节点。</p>
+      </div>
+      <section class="controls" aria-label="演示设置">
+        <label
+          >实例<select id="preset">
+            <option value="0">入门 · 2 步</option>
+            <option value="1" selected>分支探索 · 8 步</option>
+            <option value="2">课程实例 · 前 80 轮</option>
+          </select></label
+        >
+        <label
+          >启发函数<select id="heuristic">
+            <option value="MANHATTAN">曼哈顿距离</option>
+            <option value="MISPLACED">错位数</option>
+          </select></label
+        >
+        <label
+          >节奏<select id="speed">
+            <option value="1800">细讲</option>
+            <option value="1000" selected>标准</option>
+            <option value="350">快览</option>
+          </select></label
+        ><button id="restart">↺ 重来</button>
       </section>
-      <aside><section class="settings card"><p class="eyebrow">CONFIGURATION</p><h2>探索设置</h2><label for="sample">选择实例</label><select id="sample"><option value="imported" disabled>已导入的路径</option><option value="0">课程实例 01 · 21 步</option><option value="1">课程实例 02 · 31 步</option><option value="2">课程实例 03 · 31 步</option></select><label>搜索算法</label><div class="algorithm"><span id="algorithm-name">A*</span><span id="algorithm-tag" class="tiny-tag">最优搜索</span></div><label>启发函数（内置演示设置）</label><div class="segmented"><button id="manhattan" class="selected">曼哈顿距离</button><button id="misplaced">错位将牌数</button></div><p id="heuristic-note" class="hint">所有数字块与目标位置的横纵距离之和，不计空格。</p><button id="solve" class="solve">重新求解 <span>↗</span></button><button id="import" class="import">＋ 导入 Java 解路径 JSON</button><input id="file" type="file" accept="application/json,.json" hidden><p id="message" class="message" role="status"></p></section>
-        <section class="metrics card"><div class="metrics-heading"><h2>搜索记录</h2><span id="source">浏览器 A* 演示</span></div><div class="metric-grid"><div><span>解路径长度</span><strong id="length">—<small>步</small></strong></div><div><span>求解耗时</span><strong id="time">—<small>ms</small></strong></div><div><span>生成节点</span><strong id="generated">—</strong></div><div><span>扩展节点</span><strong id="expanded">—</strong></div></div><p id="metrics-note" class="hint">演示耗时取自当前浏览器；Java 实验数据请通过 JSON 导入。</p></section></aside>
-    </div>
-    <section class="study card"><p class="eyebrow">01 / SOLUTION LIBRARY</p><h2>多个问题，一处回放。</h2><p>使用右侧导入按钮选择多个 JSON 或解路径 TXT；全部文件在本机读取。下方切换已导入记录，内置演示设置仍独立保留。</p><label for="result-list">已导入的解路径</label><select id="result-list" disabled aria-label="已导入的解路径"></select><h3>空格动作序列</h3><p class="hint">N / E / S / W 表示空格向北 / 东 / 南 / 西移动。点击任一步直接定位。</p><div id="moves" class="moves"></div></section>
-    <section class="study card"><p class="eyebrow">02 / EXPERIMENT RECORDS</p><h2>用数据解释搜索。</h2><p id="comparison-note">导入含 goal 的实验 JSON 后，展示同一问题下的数据。</p><div class="table-scroll"><table><thead><tr><th>文件 / 实例</th><th>算法</th><th>启发函数</th><th>步数</th><th>耗时 ms</th><th>生成节点</th><th>扩展节点</th></tr></thead><tbody id="comparison-body"></tbody></table></div></section>
-    <section class="study card experiment-lab" id="experiment-lab">
-      <p class="eyebrow">GROUP EXPERIMENTS / WORKBOOK SNAPSHOT</p><h2>从八数码，到困难十五数码。</h2>
-      <p id="lab-source"></p><p class="hint">这部分是小组 Windows 实验快照，不与上方本机路径样例混算；没有路径的数据只展示统计。源码更新不等于旧实验自动重跑。</p>
-      <div class="lab-controls"><label for="lab-dataset">实验数据集<select id="lab-dataset"></select></label><label for="lab-metric">对比指标<select id="lab-metric"></select></label><label class="lab-checkbox"><input id="lab-log" type="checkbox" checked> 对数刻度</label></div>
-      <p id="lab-note"></p><p id="lab-summary" role="status"></p><div id="lab-legend" class="lab-legend"></div><div id="lab-chart" class="lab-chart"></div>
-      <details class="lab-table-details"><summary>查看图表数值（最多四位小数，下载保留原值）</summary><div class="table-scroll"><table><thead><tr><th>实例 / 深度</th><th>配置</th><th>记录数</th><th>当前指标值 / 状态</th></tr></thead><tbody id="lab-table"></tbody></table></div></details>
-      <p id="lab-issues" class="hint"></p><div id="lab-audit"></div><div class="moves"><button id="lab-download">下载当前数据集明细 CSV</button><button id="lab-download-json">下载完整实验快照 JSON</button></div>
-    </section>
-    <section class="study card" id="pdb-study"><p class="eyebrow">03 / PATTERN DATABASE</p><h2>分组相同，不代表编码相同。</h2><p>下方跟随当前路径帧展示抽象棋盘。其余数字写成“·”，仍占据格子；这是分组原理示意，不查询 PDB、不显示伪造启发值。</p><label for="pattern-kind">四阶 PDB 引擎（八数码固定为 3–3–2 乘积表）</label><select id="pattern-kind"><option value="ordinary">A* / IDA* · RegularPdbHeuristic · 6–6–3 排名表</option><option value="ranked">NIDA* · ComponentPdbContext · 7–8 连通分量表</option></select><div id="patterns" class="patterns"></div><p class="hint">一次移动只向被移动数字所属组计费，因而组间下界可以相加。对称增强取 max(直接下界, 对称下界)，不是将二者相加；目标空格在主对角线时才启用。</p>
-      <div class="pdb-explainer"><section><h3>三阶 · 3–3–2</h3><p>DisjointPdbHeuristic / ProductPdbContext。乘积编码，距离表净大小 13,851 字节。</p></section><section><h3>四阶普通搜索 · 6–6–3</h3><p>RegularPdbHeuristic 使用排名编码，保留空格位置、去除重叠无效索引。距离数据约 110.01 MiB。</p></section><section><h3>四阶专用搜索 · 7–8</h3><p>ComponentPdbContext 将空格零代价互达的位置合并为连通分量，保留不同分量的距离。分量距离向量去重、映射位压缩，距离数据约 482 MiB。</p></section></div>
-      <p class="hint">表大小来自当前仓库说明，不等于峰值堆内存。小组报告的首次建库约 20 分钟、缓存加载约 0.3 秒，是该实验机器的观测值。仅读取当前 component-le-*.bin；旧缓存不会自动兼容。网页不在浏览器构建数据库。</p>
-    </section>
-    <section class="study card search-lab" id="search-lab"><p class="eyebrow">04 / SEARCH PROCESS LAB</p><h2>不只看答案，也看如何寻找。</h2><p>浏览器教学 A* 的真实执行轨迹，与上方 Java 实验记录独立。局部图只展示父节点、当前节点和直接子节点；不是完整搜索树。最多记录 300 次取出，截断不代表无解。</p>
-      <div class="trace-controls"><label>教学实例<select id="trace-sample"><option value="0">入门 · 2 步</option><option value="1" selected>探索 · 8 步</option><option value="2">课程实例 · 21 步（可能截断）</option></select></label><label>启发函数<select id="trace-heuristic"><option value="manhattan">MANHATTAN</option><option value="misplaced">MISPLACED</option></select></label><label>播放间隔<select id="trace-speed"><option value="1000">1 秒</option><option value="500" selected>0.5 秒</option><option value="150">0.15 秒</option></select></label></div>
-      <div class="trace-legend"><span>● 蓝：当前节点</span><span>● 青：待扩展</span><span>● 灰：重复剪枝 / 已扩展</span></div>
-      <div class="trace-layout"><div id="trace-graph" class="trace-graph" aria-label="局部搜索图"></div><aside class="trace-inspector"><p class="eyebrow">NODE INSPECTOR</p><div id="trace-board" class="trace-mini trace-detail-board"></div><p id="trace-detail"></p><h3>搜索规模</h3><p id="trace-stats"></p><svg id="trace-chart" viewBox="0 0 600 190" role="img" aria-label="累计生成、累计扩展和 Frontier 大小曲线"></svg><p class="hint">深蓝：生成 · 青色：扩展 · 金色：Frontier<br>生成计数包含被剪枝的合法子节点，不包含根节点。</p></aside></div>
-      <p id="trace-message" role="status"></p><div class="moves"><button id="trace-reset">↺ 起点</button><button id="trace-prev">← 上一步</button><button id="trace-play">▶ 播放搜索</button><button id="trace-next">下一步 →</button><span id="trace-count"></span></div><input id="trace-progress" type="range" min="0" value="0" aria-label="搜索过程进度">
-    </section>
-    <section class="explanation"><div class="explanation-title"><span class="explain-icon">↗</span><div><p class="eyebrow">UNDER THE HOOD</p><h2>每一步，都有方向。</h2></div></div><p>数字块滑入空格，棋盘向目标靠近。A* 用 <code>f(n) = g(n) + h(n)</code> 衡量候选状态，在已走的路与预估距离之间寻找最优选择。</p><div class="keyboard"><kbd>Space</kbd> 播放 / 暂停 <span>·</span> <kbd>←</kbd><kbd>→</kbd> 单步探索</div></section>
-    <footer><span>N-PUZZLE LAB <span class="footer-dot">/</span> 让算法变得可见</span><span>阶段一至三实验 · 路径与搜索教学</span></footer>
-  </main><script src="examples.js"></script><script src="app.js"></script><script src="results.js"></script><script src="lab-data.js"></script><script src="experiment-lab.js"></script><script src="search-trace.js"></script><script src="search-lab.js"></script>
-</body></html>
+      <section class="film" aria-label="A* 算法动画">
+        <div id="phase-strip" class="phase-strip">
+          <span data-phase="f">① 比 f</span
+          ><span data-phase="g">② 同 f 比 g</span
+          ><span data-phase="pick">③ 取出</span
+          ><span data-phase="child">④ 展开与剪枝</span
+          ><span data-phase="merge">⑤ 回到 Open</span>
+        </div>
+        <div class="narration">
+          <span id="shot-tag">起点</span>
+          <h2 id="headline">将起点放入 Open。</h2>
+          <p id="explanation" role="status"></p>
+        </div>
+        <div class="arena">
+          <div class="main-column">
+            <section class="open-panel">
+              <div class="panel-heading">
+                <h3>Open · 待选节点</h3>
+                <button id="show-open" class="text-button">展开全部</button>
+              </div>
+              <p id="open-caption" class="small"></p>
+              <div id="open-list" class="open-list"></div>
+            </section>
+            <section class="expansion-panel">
+              <div class="panel-heading">
+                <h3 id="expansion-title">当前节点 → 后继</h3>
+                <span class="small">U / D / L / R：空格方向</span>
+              </div>
+              <div id="expansion" class="expansion"></div>
+            </section>
+          </div>
+          <aside class="inspector">
+            <p id="inspect-kicker" class="eyebrow">NODE INSPECTOR</p>
+            <h3 id="inspect-title">起点 #0</h3>
+            <div
+              id="focus-board"
+              class="focus-board"
+              aria-label="当前查看的棋盘"
+            ></div>
+            <div class="equation" aria-label="节点权值">
+              <div class="g"><small>已走 g</small><b id="cost-g">0</b></div>
+              <span>+</span>
+              <div class="h"><small>估计 h</small><b id="cost-h">8</b></div>
+              <span>=</span>
+              <div class="f"><small>权值 f</small><b id="cost-f">8</b></div>
+            </div>
+            <p id="heuristic-proof" class="small"></p>
+            <div id="comparison-proof" class="comparison-proof"></div>
+            <p id="inspect-note" class="small"></p>
+          </aside>
+        </div>
+        <section class="tree-panel">
+          <div class="panel-heading">
+            <div>
+              <h3>搜索树</h3>
+              <p class="small">
+                蓝色：当前 · 青色：Open · 灰色：已展开 · 金色：解路径
+              </p>
+            </div>
+            <div class="tree-tools">
+              <label><input id="pruned" type="checkbox" />显示剪枝</label
+              ><button id="fit-tree">缩览树</button
+              ><button id="actual-tree" class="active">原始比例</button>
+            </div>
+          </div>
+          <div id="tree-viewport" class="tree-viewport">
+            <svg
+              id="search-tree"
+              role="img"
+              aria-label="逐步展开的 Java 搜索树"
+            ></svg>
+          </div>
+          <p id="tree-note" class="small"></p>
+        </section>
+        <div class="transport">
+          <button id="previous">← 上一步</button
+          ><button id="play" class="primary">▶ 播放算法</button
+          ><button id="next">下一步 →</button><span id="position"></span
+          ><input
+            id="timeline"
+            type="range"
+            min="0"
+            value="0"
+            aria-label="动画进度"
+          />
+        </div>
+      </section>
+      <details class="provenance">
+        <summary>轨迹来源</summary>
+        <p id="source"></p>
+        <p>
+          由项目 Java A* 与 PqFrontier
+          直接录制，并与未加观察器的搜索结果核对。分镜用于讲解。
+        </p>
+        <p>
+          f 相同先比 g；仍相同则展示 Java 队列本次选择。课程实例只录前 80 轮。
+        </p>
+      </details>
+    </main>
+    <script src="java-search-traces.js"></script>
+    <script src="search-studio.js?v=20261030-states2"></script>
+  </body>
+</html>

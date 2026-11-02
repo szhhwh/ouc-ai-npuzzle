@@ -1,0 +1,1210 @@
+:root {
+  --blue: #004494;
+  --cyan: #00a6d8;
+  --gold: #b78b2c;
+  --ink: #183b55;
+  --muted: #61778a;
+  --line: #dbe6ef;
+  --paper: #f3f6fa;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    14px/1.6 system-ui,
+    -apple-system,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+}
+button,
+select,
+input {
+  font: inherit;
+}
+button,
+select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--blue);
+  padding: 8px 12px;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button:hover:not(:disabled) {
+  background: #e9f3fc;
+}
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 3px;
+}
+.masthead {
+  max-width: 1440px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 30px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.brand {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-decoration: none;
+  color: var(--blue);
+}
+.brand span {
+  color: var(--cyan);
+}
+.brand small {
+  font-size: 11px;
+  letter-spacing: 0;
+  font-weight: 500;
+  margin-left: 12px;
+}
+.masthead > button {
+  margin-left: auto;
+}
+main {
+  max-width: 1440px;
+  margin: auto;
+  padding: 18px 30px 28px;
+}
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--muted);
+  margin: 0 0 5px;
+}
+h1 {
+  font-size: 29px;
+  letter-spacing: -1px;
+  margin: 0;
+  font-weight: 650;
+}
+h1 span {
+  color: var(--blue);
+}
+.lead {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.controls {
+  display: flex;
+  gap: 18px;
+  align-items: end;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+}
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.controls select {
+  min-width: 140px;
+  font-size: 13px;
+  max-width: 100%;
+}
+.controls > button {
+  margin-left: auto;
+}
+.film {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px #143a5a08;
+}
+.phase-strip {
+  display: flex;
+  background: #eef4fa;
+  border-bottom: 1px solid var(--line);
+  padding: 0 16px;
+  gap: 6px;
+  overflow: auto;
+}
+.phase-strip span {
+  padding: 10px 16px;
+  font-size: 12px;
+  white-space: nowrap;
+  border-bottom: 3px solid transparent;
+  color: #6e8598;
+}
+.phase-strip span.active {
+  color: var(--blue);
+  border-color: var(--blue);
+  background: #fff;
+  font-weight: 700;
+}
+.narration {
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+  min-height: 91px;
+}
+.narration > span {
+  float: right;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: #edf6fb;
+  color: var(--blue);
+}
+.narration h2 {
+  font-size: 20px;
+  margin: 0 0 4px;
+  line-height: 1.45;
+}
+.narration p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.arena {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+.main-column {
+  min-width: 0;
+}
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.panel-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.panel-heading p {
+  margin: 2px 0 0;
+}
+.small {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.text-button {
+  border: 0;
+  background: transparent;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+.open-panel,
+.expansion-panel {
+  padding: 14px 20px;
+}
+.open-panel {
+  border-bottom: 1px solid var(--line);
+}
+.open-panel > p {
+  margin: 0 0 8px;
+}
+.open-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 192px;
+  overflow: auto;
+  padding: 3px;
+}
+.candidate {
+  text-align: left;
+  padding: 9px;
+  border: 1px solid #dce6ee;
+  border-radius: 9px;
+  background: white;
+  position: relative;
+  transition:
+    background 0.35s,
+    border-color 0.35s,
+    box-shadow 0.35s;
+  min-width: 0;
+}
+.node-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.cost-line {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cost-line b {
+  font-size: 18px;
+  margin-left: 5px;
+  color: var(--blue);
+}
+.candidate.f-min {
+  background: #fff8e8;
+  border-color: #d9ba6d;
+}
+.candidate.g-min {
+  border: 2px solid var(--gold);
+  padding: 8px;
+}
+.candidate.winner {
+  background: var(--blue);
+  color: white;
+  border-color: var(--blue);
+  box-shadow: 0 4px 12px #00449428;
+  animation: selected 0.6s ease;
+}
+.candidate.winner .node-title,
+.candidate.winner .cost-line b {
+  color: white;
+}
+.candidate.inspected:not(.winner) {
+  box-shadow: inset 0 0 0 2px var(--cyan);
+}
+.candidate.bad {
+  background: #edf1f5;
+  border-style: dashed;
+  color: #7d8d9b;
+}
+.candidate.bad .mini-board span {
+  background: #dfe6ec;
+  color: #8a9aa7;
+}
+.candidate.child-active {
+  border: 2px solid var(--cyan);
+  padding: 8px;
+  animation: arrive 0.5s ease;
+}
+.mini-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  width: 50px;
+  margin-bottom: 6px;
+}
+.mini-board span {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  background: #e4edf6;
+  border-radius: 2px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--blue);
+}
+.mini-board .blank {
+  background: #f2f6fa;
+}
+.winner .mini-board span {
+  background: #ffffff25;
+  color: white;
+}
+.badge {
+  display: block;
+  font-size: 10px;
+  white-space: normal;
+  margin-top: 5px;
+  color: #6d8294;
+}
+.winner .badge {
+  color: #c6efff;
+}
+.expansion {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  min-height: 102px;
+}
+.parent-node {
+  flex: 0 0 118px;
+  align-self: start;
+}
+.expansion .arrow {
+  align-self: center;
+  font-size: 22px;
+  color: #9aafbf;
+}
+.children {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.children .candidate {
+  padding: 8px 6px;
+}
+.children .node-title {
+  display: block;
+}
+.children .cost-line {
+  font-size: 10px;
+}
+.children .cost-line b {
+  font-size: 15px;
+}
+.child-placeholder {
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  display: grid;
+  place-content: center;
+  min-height: 110px;
+  color: #a5b5c2;
+  font-size: 11px;
+}
+.inspector {
+  border-left: 1px solid var(--line);
+  background: #f9fbfd;
+  padding: 18px;
+  min-width: 0;
+}
+.inspector > h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+.focus-board {
+  width: 165px;
+  height: 165px;
+  position: relative;
+  margin: 4px auto 15px;
+}
+.focus-tile {
+  position: absolute;
+  width: calc(33.333% - 5px);
+  height: calc(33.333% - 5px);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--blue);
+  color: white;
+  font-size: 23px;
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.focus-tile.blank {
+  background: #e7eef5;
+}
+.focus-board.instant .focus-tile {
+  transition: none;
+}
+.equation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+.equation > div {
+  text-align: center;
+  flex: 1;
+  background: #edf3f9;
+  padding: 7px 4px;
+  border-radius: 7px;
+}
+.equation small {
+  display: block;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.equation b {
+  display: block;
+  font-size: 24px;
+  line-height: 1.4;
+}
+.equation .g {
+  color: var(--blue);
+}
+.equation .h {
+  color: #956d19;
+  background: #fcf5e6;
+}
+.equation .f {
+  background: var(--blue);
+  color: white;
+}
+.comparison-proof {
+  font-size: 12px;
+  line-height: 1.8;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.comparison-proof p {
+  margin: 0 0 5px;
+}
+.comparison-proof strong {
+  color: var(--blue);
+}
+.tree-panel {
+  border-top: 1px solid var(--line);
+  padding: 12px 20px;
+}
+.tree-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.tree-tools button {
+  font-size: 11px;
+  padding: 5px 8px;
+}
+.tree-tools input {
+  accent-color: var(--blue);
+}
+.tree-viewport {
+  height: 250px;
+  overflow: auto;
+  background: #f5f8fc;
+  border: 1px solid #e4ecf2;
+  border-radius: 10px;
+  scroll-behavior: smooth;
+}
+.tree-viewport svg {
+  display: block;
+}
+.tree-link {
+  stroke: #c7d7e4;
+  stroke-width: 1.5;
+  fill: none;
+}
+.tree-link.solution {
+  stroke: var(--gold);
+  stroke-width: 3;
+}
+.tree-node {
+  cursor: pointer;
+  outline: none;
+}
+.tree-node circle {
+  fill: #e5edf5;
+  stroke: #b7c9d7;
+  stroke-width: 1.5;
+  transition: fill 0.3s;
+}
+.tree-node text {
+  fill: #537186;
+  font: 10px system-ui;
+  pointer-events: none;
+}
+.tree-node.open circle {
+  fill: #e6f7fc;
+  stroke: var(--cyan);
+}
+.tree-node.active circle {
+  fill: var(--blue);
+  stroke: var(--blue);
+  stroke-width: 3;
+}
+.tree-node.active text {
+  fill: white;
+}
+.tree-node.pruned circle {
+  fill: #eef0f2;
+  stroke: #c1c9d0;
+  stroke-dasharray: 3 3;
+}
+.tree-node.pruned text {
+  fill: #929ea8;
+}
+.tree-node.solution circle {
+  fill: #fff1c8;
+  stroke: var(--gold);
+  stroke-width: 3;
+}
+.tree-node.inspect circle,
+.tree-node:focus circle {
+  stroke: #e88c33;
+  stroke-width: 4;
+}
+.transport {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: #fbfcfe;
+}
+.primary {
+  background: var(--blue);
+  color: white;
+  min-width: 140px;
+  border-color: var(--blue);
+}
+.primary:hover:not(:disabled) {
+  background: #00336e;
+}
+.transport > span {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.transport input {
+  width: 100%;
+  accent-color: var(--blue);
+  height: 8px;
+  cursor: pointer;
+}
+.provenance {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 15px 0;
+  overflow-wrap: anywhere;
+}
+.provenance summary {
+  cursor: pointer;
+}
+.provenance p {
+  max-width: 1100px;
+}
+.cinema .title-row,
+.cinema .controls,
+.cinema .masthead > span,
+.cinema .provenance {
+  display: none;
+}
+.cinema main {
+  padding-top: 12px;
+}
+.cinema .masthead {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.cinema .tree-viewport {
+  height: 265px;
+}
+@keyframes selected {
+  from {
+    box-shadow: 0 0 0 7px #00a6d833;
+  }
+  to {
+    box-shadow: 0 4px 12px #00449428;
+  }
+}
+@keyframes arrive {
+  from {
+    opacity: 0.15;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 1100px) {
+  .arena {
+    grid-template-columns: minmax(0, 1fr) 270px;
+  }
+  .open-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .children {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .parent-node {
+    flex-basis: 98px;
+  }
+}
+@media (max-width: 760px) {
+  main {
+    padding: 14px 12px;
+  }
+  .masthead {
+    padding: 12px 16px;
+  }
+  .masthead > span,
+  .lead {
+    display: none;
+  }
+  h1 {
+    font-size: 25px;
+  }
+  .controls {
+    gap: 10px;
+  }
+  .controls label {
+    flex: 1;
+    min-width: 135px;
+  }
+  .controls select {
+    min-width: 0;
+    width: 100%;
+    font-size: 12px;
+  }
+  .arena {
+    grid-template-columns: 1fr;
+  }
+  .inspector {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .phase-strip span {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+  .panel-heading {
+    align-items: start;
+    flex-wrap: wrap;
+  }
+  .tree-viewport {
+    height: 225px;
+  }
+  .narration {
+    padding: 13px;
+  }
+  .narration h2 {
+    font-size: 18px;
+  }
+  .narration > span {
+    float: none;
+    display: inline-block;
+    margin-bottom: 7px;
+  }
+  .narration p {
+    font-size: 12px;
+  }
+  .open-panel,
+  .expansion-panel,
+  .tree-panel {
+    padding: 12px;
+  }
+  .expansion {
+    gap: 6px;
+  }
+  .parent-node {
+    flex-basis: 90px;
+  }
+  .transport {
+    padding: 10px;
+    gap: 6px;
+  }
+  .transport button {
+    font-size: 12px;
+    padding: 8px;
+  }
+  .primary {
+    min-width: 120px;
+  }
+}
+@media (max-width: 420px) {
+  .open-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tree-tools {
+    white-space: normal;
+  }
+  .brand small {
+    display: none;
+  }
+  .transport > span {
+    width: 100%;
+    margin: 0;
+  }
+}
+.compact .title-row,
+.compact .phase-strip,
+.compact .main-column,
+.compact #explanation,
+.compact #inspect-kicker,
+.compact #heuristic-proof,
+.compact #comparison-proof,
+.compact #inspect-note,
+.compact .tree-panel .small,
+.compact .provenance {
+  display: none;
+}
+.compact main {
+  max-width: 1180px;
+  padding: 12px 20px 18px;
+}
+.compact .masthead {
+  max-width: 1180px;
+  padding: 10px 20px;
+}
+.compact .controls {
+  margin-bottom: 12px;
+  gap: 12px;
+}
+.compact .controls label {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.compact .controls select {
+  padding: 6px 9px;
+  min-width: 115px;
+}
+.compact .film {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+.compact .narration,
+.compact .transport {
+  grid-column: 1/-1;
+}
+.compact .narration {
+  min-height: 0;
+  padding: 10px 16px;
+}
+.compact .narration h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.compact .narration > span {
+  padding: 1px 8px;
+}
+.compact .arena {
+  display: block;
+  min-width: 0;
+}
+.compact .inspector {
+  height: 100%;
+  border: 0;
+  border-right: 1px solid var(--line);
+  padding: 14px;
+}
+.compact .inspector > h3 {
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+.compact .focus-board {
+  width: 192px;
+  height: 192px;
+  margin: 0 auto 16px;
+}
+.compact .focus-tile {
+  font-size: 26px;
+}
+.compact .equation > div {
+  padding: 7px 3px;
+}
+.compact .equation b {
+  font-size: 25px;
+}
+.compact .tree-panel {
+  min-width: 0;
+  border-top: 0;
+  padding: 12px;
+}
+.compact .tree-panel .panel-heading {
+  margin-bottom: 8px;
+}
+.compact .tree-viewport,
+.compact.cinema .tree-viewport {
+  height: 340px;
+}
+.compact .tree-tools {
+  gap: 5px;
+}
+.compact .tree-tools button {
+  padding: 4px 6px;
+}
+.compact .transport {
+  padding: 9px 14px;
+  gap: 8px;
+}
+.compact .transport button {
+  padding: 6px 10px;
+}
+.compact .transport input {
+  margin: 3px 0;
+}
+@media (max-width: 760px) {
+  .compact main {
+    padding: 10px;
+  }
+  .compact .film {
+    grid-template-columns: 1fr;
+  }
+  .compact .inspector {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 8px 14px;
+    padding: 12px;
+  }
+  .compact .inspector > h3 {
+    grid-column: 1/-1;
+    margin: 0;
+  }
+  .compact .focus-board {
+    width: 150px;
+    height: 150px;
+    margin: 0;
+  }
+  .compact .focus-tile {
+    font-size: 22px;
+  }
+  .compact .equation {
+    align-self: center;
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+  .compact .equation small {
+    font-size: 10px;
+  }
+  .compact .equation b {
+    font-size: 22px;
+  }
+  .compact .tree-viewport,
+  .compact.cinema .tree-viewport {
+    height: 270px;
+  }
+  .compact .controls label {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+    min-width: 100px;
+  }
+  .compact .controls select {
+    min-width: 0;
+  }
+  .compact .narration > span {
+    float: right;
+    margin: 0;
+  }
+  .compact .narration h2 {
+    font-size: 15px;
+  }
+  .compact .tree-tools {
+    white-space: normal;
+  }
+}
+.compact .film {
+  grid-template-columns: minmax(0, 1fr);
+}
+.compact .inspector {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 8px 18px;
+  border-right: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 16px;
+}
+.compact .inspector > h3 {
+  grid-column: 1/-1;
+  margin: 0;
+}
+.compact .focus-board {
+  width: 150px;
+  height: 150px;
+  margin: 0;
+}
+.compact .equation {
+  align-self: center;
+}
+.compact .tree-viewport,
+.compact.cinema .tree-viewport {
+  height: clamp(240px, 36vh, 340px);
+}
+.tree-node .state-card {
+  fill: #fff;
+  stroke: #b7c9d7;
+  stroke-width: 1.5;
+}
+.tree-node .state-tile {
+  fill: #e1eaf4;
+  stroke: none;
+}
+.tree-node .state-tile.empty {
+  fill: #eff3f8;
+}
+.tree-node text.state-value {
+  fill: var(--blue);
+  font-size: 12px;
+}
+.tree-node text.state-id {
+  fill: #537186;
+  font-size: 11px;
+  font-weight: 600;
+}
+.tree-node text.state-cost {
+  fill: #537186;
+  font-size: 10px;
+}
+.tree-node.open .state-card {
+  stroke: var(--cyan);
+  fill: #f2fbfe;
+}
+.tree-node.active .state-card {
+  fill: var(--blue);
+  stroke: var(--blue);
+  stroke-width: 2.5;
+}
+.tree-node.active text {
+  fill: #fff;
+}
+.tree-node.active .state-tile {
+  fill: #ffffff30;
+}
+.tree-node.active .state-tile.empty {
+  fill: #ffffff13;
+}
+.tree-node.pruned .state-card {
+  fill: #f0f2f4;
+  stroke-dasharray: 4 3;
+}
+.tree-node.pruned .state-tile {
+  fill: #e2e6eb;
+}
+.tree-node.pruned text {
+  fill: #8b98a3;
+}
+.tree-node.solution .state-card {
+  fill: #fff7df;
+  stroke: var(--gold);
+  stroke-width: 2.5;
+}
+.tree-node.solution text {
+  fill: #72551c;
+}
+.tree-node.solution .state-tile {
+  fill: #efdfb2;
+}
+.tree-node.inspect .state-card,
+.tree-node:focus .state-card {
+  stroke: #e88c33;
+  stroke-width: 3;
+}
+.tree-node.new-node .state-card {
+  animation: tree-arrive 0.5s ease;
+}
+@keyframes tree-arrive {
+  from {
+    opacity: 0;
+    stroke-width: 7;
+  }
+  to {
+    opacity: 1;
+    stroke-width: 1.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================
+   终极排版优化：左右互换，树变宽，盘面变大
+   ========================================== */
+
+/* 1. 外层网格：左边变窄（1fr），右边变宽（1.5fr） */
+.compact .film {
+  display: grid;
+  /* 左边占 1 份，右边占 1.5 份（让搜索树更大） */
+  grid-template-columns: 1fr 1.5fr;
+  grid-template-rows: auto 1fr auto;
+  gap: 16px;
+  padding: 16px;
+  background-color: #f5f7fa;
+  border-radius: 12px;
+  border: none;
+  height: calc(100vh - 180px);
+  min-height: 600px;
+}
+
+/* 顶部叙述栏全宽 */
+.compact .narration {
+  grid-column: 1 / -1;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* 2. 左侧容器（原本的右侧 inspector）：放盘面和公式 */
+.compact .inspector {
+  /* 🌟 重点：把它放到左边第 1 列 */
+  grid-column: 1 / 2;
+  grid-row: 2 / 3;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 左侧：盘面卡片（放大版） */
+.compact .inspector > h3 {
+  margin: 0;
+  padding: 16px 20px;
+  font-size: 16px;
+  color: #004494;
+  text-align: center;
+  background-color: #ffffff;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.02);
+}
+
+/* 让盘面容器占据更多空间（高度变大） */
+.compact .inspector > .focus-board {
+  /* 盘子放大到 210x210 */
+  width: 210px !important;
+  height: 210px !important;
+
+  /* 用 margin: auto 让它在这一块区域中绝对居中 */
+  margin: auto !important;
+
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  position: relative;
+  display: block !important;
+  overflow: visible !important;
+}
+
+/* 盘面外面的白卡片背景 */
+.compact .inspector > .focus-board::after {
+  content: "";
+  position: absolute;
+  top: -30px;
+  bottom: -30px;
+  left: -30px;
+  right: -30px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  z-index: -1;
+}
+
+/* 数字块重新适配 210x210 的盘子 */
+.compact .inspector > .focus-board .focus-tile {
+  position: absolute !important;
+  /* 210 / 3 = 70，留出 4px 缝隙 */
+  width: calc(210px / 3 - 4px) !important;
+  height: calc(210px / 3 - 4px) !important;
+  font-size: 32px !important; /* 数字放大 */
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 10px !important;
+  top: 2px !important;
+  left: 2px !important;
+}
+.compact .inspector > .focus-board .focus-tile.blank {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 左侧下部：公式卡片（缩小版，不要占太高） */
+.compact .equation {
+  /* 不让他自动撑满，限制最大高度 */
+  flex: 0 0 auto !important;
+  max-height: 120px;
+
+  background-color: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+.compact .equation > div {
+  padding: 15px 10px;
+  border-radius: 10px;
+  flex: 1;
+  text-align: center;
+  margin: 0 8px;
+}
+.compact .equation > div:first-child {
+  margin-left: 0;
+}
+.compact .equation > div:last-child {
+  margin-right: 0;
+}
+.compact .equation > span {
+  color: #a0b0c0;
+  font-weight: bold;
+  font-size: 20px;
+}
+
+/* 3. 右侧容器（原本的 tree-panel）：放搜索树 */
+.compact .tree-panel {
+  /* 🌟 重点：把它放到右边第 2 列 */
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  padding: 16px;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 搜索树占满右侧高度，可滚动 */
+.compact .tree-viewport {
+  height: 100%;
+  flex: 1;
+  overflow: auto;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.compact .main-column {
+  display: none !important;
+}
+
+/* 底部控制条全宽 */
+.compact .transport {
+  grid-column: 1 / -1;
+  background: transparent;
+  border-top: none;
+  padding: 0;
+}
+
+/* 让被选中的按钮变蓝，文字变白 */
+.compact .tree-tools button.active {
+  background-color: #004494 !important;
+  color: #ffffff !important;
+  border-color: #004494 !important;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 68, 148, 0.3);
+}
+
+/* 鼠标悬停时的反馈（如果没被选中） */
+.compact .tree-tools button:not(.active):hover {
+  background-color: #e9f3fc;
+}

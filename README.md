@@ -1,7 +1,7 @@
 
 # A* 算法过程动画
 
-打开 `index.html`，无需前端依赖。紧凑页面只展示棋盘与 g/h/f、搜索树两个区域；隐藏说明小字、Open 候选列表与后继面板，不再显示搜索规模曲线。桌面左右排列，窄屏上下排列。
+打开 `visualization/index.html`，无需前端依赖。紧凑页面只展示棋盘与 g/h/f、搜索树两个区域；隐藏说明小字、Open 候选列表与后继面板，不再显示搜索规模曲线。桌面左右排列，窄屏上下排列。
 
 支持播放/暂停、单步、进度定位、两种启发函数、节点检查和录屏布局。录屏布局只隐藏设置与说明，不生成视频文件，可用系统录屏录制。
 
@@ -23,13 +23,11 @@ bash scripts/export-search-traces.sh /tmp/new-java-search-traces.js
 
 核验后用新产物替换 `java-search-traces.js`。源版本带 `dirty` 表示录制时包含未提交 Java 源码。
 
-## 本地与发布
+## 本地预览
 
-直接打开 `index.html`；或在仓库根目录运行 `python3 -m http.server 8765 --directory visualization`，访问 http://127.0.0.1:8765/。
+直接打开 `visualization/index.html`；或在仓库根目录运行 `python3 -m http.server 8765 --directory visualization`，访问 http://127.0.0.1:8765/。
 
-Pages 仅发布 `index.html`、`search-studio.css`、`search-studio.js`、`java-search-traces.js`，合并 main 后由 GitHub Actions 部署。本地修改不会自动更新公网网站。
-
-旧综合面板保留为 `overview.html`，旧说明在 `OVERVIEW-README.md`；旧资源留在仓库，不随新首页发布。
+`visualization/overview.html` 为综合面板。
 
 # OUC AI N-Puzzle 项目
 
@@ -123,7 +121,5 @@ n  <n*n 个初始状态数字>  <n*n 个目标状态数字>
 
 ## 网页可视化与实验导出
 
-打开 `visualization/index.html` 可查看解路径播放、实验图表、PDB 分组示意和 A* 教学轨迹。使用 `bash scripts/export-visualization.sh` 导出 Java 求解结果，参数见 [可视化说明](visualization/README.md)。
-
-网页另含来源工作簿的阶段一至三、八数码分层与数据结构实验快照，并与本机十八条最新 Java 路径分开标注。刷新和只读核验分别使用 `scripts/import-experiment-workbook.py`、`node scripts/check-visualization-data.cjs`；数据来源、异常记录与计时边界见可视化说明。
+打开 `visualization/index.html` 可查看 A* 算法过程动画；综合面板位于 `visualization/overview.html`。使用 `bash scripts/export-visualization.sh` 导出 Java 求解结果。
 
