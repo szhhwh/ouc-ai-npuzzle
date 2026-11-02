@@ -20,7 +20,7 @@
   function stop() {
     clearTimeout(timer);
     timer = null;
-    $("play").textContent = "▶ 播放算法";
+    $("play-studio").textContent = "▶ 播放算法";
   }
   function load() {
     stop();
@@ -44,7 +44,7 @@
     position = 0;
     inspected = null;
     $("timeline").max = shots.length - 1;
-    $("source").textContent =
+    $("source-studio").textContent =
       `${data.source} · ${data.sourceRevision} · 已核对原始搜索结果`;
     render();
   }
@@ -121,7 +121,7 @@
       words.merge = "前 80 轮演示结束。";
     }
     $("headline").textContent = titles[phase];
-    $("explanation").textContent = words[phase];
+    $("explanation-studio").textContent = words[phase];
     $("shot-tag").textContent = frame ? `第 ${shot.round + 1} 轮` : "起点";
     document
       .querySelectorAll("[data-phase]")
@@ -203,7 +203,7 @@
     $("position").textContent = `${position + 1} / ${shots.length}`;
     $("timeline").value = position;
     $("previous").disabled = position === 0;
-    $("next").disabled = position === shots.length - 1;
+    $("next-studio").disabled = position === shots.length - 1;
   }
   let oldBoard;
   function board(values) {
@@ -317,21 +317,21 @@
         render();
         tick();
       },
-      Number($("speed").value),
+      Number($("speed-studio").value),
     );
   }
-  $("play").onclick = () => {
+  $("play-studio").onclick = () => {
     if (timer) {
       stop();
       return;
     }
     if (position === shots.length - 1) position = 0;
-    $("play").textContent = "Ⅱ 暂停";
+    $("play-studio").textContent = "Ⅱ 暂停";
     render();
     tick();
   };
   $("previous").onclick = () => step(-1);
-  $("next").onclick = () => step(1);
+  $("next-studio").onclick = () => step(1);
   $("restart").onclick = () => step(-position);
   $("timeline").oninput = () => {
     stop();
@@ -341,7 +341,7 @@
   };
   $("preset").onchange = load;
   $("heuristic").onchange = load;
-  $("speed").onchange = () => {
+  $("speed-studio").onchange = () => {
     if (timer) {
       clearTimeout(timer);
       tick();
