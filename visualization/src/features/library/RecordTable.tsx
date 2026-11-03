@@ -10,9 +10,9 @@ import {
   type SortFn,
   type SortingState,
 } from "@tanstack/react-table";
+import { defaultRangeExtractor, useVirtualizer, type Range } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, ArrowUpDown, LoaderCircle, Trash2 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useRef, useState } from "react";
 import { setLibraryOpen } from "@/app/ui-store";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -206,7 +206,9 @@ function buildColumns(onRequestDelete: (ids: string[]) => void) {
   ]);
 }
 
-const MotionRow = motion.create(TableRow);
+// Keep column widths stable as different rows enter the virtual window.
+const COLUMN_WIDTHS = [40, 268, 56, 130, 60, 98, 82, 86, 164, 130];
+const HEADER_HEIGHT = 44;
 
 interface RecordTableProps {
   metas: RecordMeta[];
@@ -219,12 +221,6 @@ export function RecordTable({ metas, selection, onSelectionChange, onRequestDele
   const currentId = useLibrary((state) => state.current?.id);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const columns = useMemo(() => buildColumns(onRequestDelete), [onRequestDelete]);
-  // Rows stagger in only while the dialog is opening; later imports appear at once.
-  const [opening, setOpening] = useState(true);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setOpening(false), 400);
-    return () => window.clearTimeout(timer);
-  }, []);
 
   const table = useTable({
     features,
@@ -240,9 +236,41 @@ export function RecordTable({ metas, selection, onSelectionChange, onRequestDele
     enableSubRowSelection: false,
   });
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Mount only the viewport; per-row Motion layout reads also conflict with the dialog's CSS scale.
+  const rows = table.getRowModel().rows;
+  const getItemKey = useCallback((index: number) => rows[index].id, [rows]);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const focusedIndex = focusedId === null ? -1 : rows.findIndex((row) => row.id === focusedId);
+  // Keep an editing input mounted when it scrolls out of view, so its draft and focus survive.
+  const rangeExtractor = useCallback((range: Range) => {
+    const indexes = defaultRangeExtractor(range);
+    if (focusedIndex >= 0 && !indexes.includes(focusedIndex)) {
+      indexes.push(focusedIndex);
+      indexes.sort((a, b) => a - b);
+    }
+    return indexes;
+  }, [focusedIndex]);
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    getItemKey,
+    rangeExtractor,
+    estimateSize: () => 69,
+    overscan: 3,
+    scrollMargin: HEADER_HEIGHT,
+  });
+  const virtualRows = virtualizer.getVirtualItems();
+  const paddingBottom = virtualRows.length
+    ? virtualizer.getTotalSize() - (virtualRows[virtualRows.length - 1].end - HEADER_HEIGHT)
+    : virtualizer.getTotalSize();
+
   return (
-    <motion.div layoutScroll className="min-h-0 flex-1 overflow-auto overscroll-contain">
-      <table data-slot="table" className="w-full min-w-[1040px] caption-bottom text-sm">
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto overscroll-contain">
+      <table data-slot="table" aria-rowcount={rows.length + 1} className="w-full min-w-[1120px] table-fixed caption-bottom text-sm">
+        <colgroup>
+          {COLUMN_WIDTHS.map((width, index) => <col key={index} style={{ width }} />)}
+        </colgroup>
         <TableHeader className="[&_tr]:border-b-0">
           {table.getHeaderGroups().map((group) => (
             <TableRow key={group.id} className="hover:bg-transparent">
@@ -267,22 +295,26 @@ export function RecordTable({ metas, selection, onSelectionChange, onRequestDele
           ))}
         </TableHeader>
         <TableBody>
-          <AnimatePresence initial>
-            {table.getRowModel().rows.map((row, index) => {
-              const current = row.id === currentId;
-              return (
-                <MotionRow
-                  key={row.id}
-                  layout="position"
-                  data-state={row.getIsSelected() ? "selected" : undefined}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -12, transition: { duration: 0.14, ease: "easeIn" } }}
-                  transition={{
-                    duration: 0.18,
-                    ease: [0.22, 0.9, 0.24, 1],
-                    delay: opening ? Math.min(index, 8) * 0.02 : 0,
+          {virtualRows.map((virtualRow, index) => {
+            const row = rows[virtualRow.index];
+            const current = row.id === currentId;
+            const paddingBefore = virtualRow.start - (index ? virtualRows[index - 1].end : HEADER_HEIGHT);
+            return (
+              <Fragment key={row.id}>
+                {paddingBefore > 0 && (
+                  <tr aria-hidden="true">
+                    <td colSpan={columns.length} style={{ height: paddingBefore, padding: 0, border: 0 }} />
+                  </tr>
+                )}
+                <TableRow
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  aria-rowindex={virtualRow.index + 2}
+                  onFocusCapture={() => setFocusedId(row.id)}
+                  onBlurCapture={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) setFocusedId(null);
                   }}
+                  data-state={row.getIsSelected() ? "selected" : undefined}
                   className={cn(
                     "duration-150 data-[state=selected]:bg-accent",
                     current && "bg-sea-wash/55 hover:bg-sea-wash/80 data-[state=selected]:bg-sea-wash",
@@ -302,12 +334,17 @@ export function RecordTable({ metas, selection, onSelectionChange, onRequestDele
                       <table.FlexRender cell={cell} />
                     </TableCell>
                   ))}
-                </MotionRow>
-              );
-            })}
-          </AnimatePresence>
+                </TableRow>
+              </Fragment>
+            );
+          })}
+          {paddingBottom > 0 && (
+            <tr aria-hidden="true">
+              <td colSpan={columns.length} style={{ height: paddingBottom, padding: 0, border: 0 }} />
+            </tr>
+          )}
         </TableBody>
       </table>
-    </motion.div>
+    </div>
   );
 }
