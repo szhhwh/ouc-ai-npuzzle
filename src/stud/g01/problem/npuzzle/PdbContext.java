@@ -41,6 +41,7 @@ abstract class PdbContext {
     /** Reused per depth and neighbor: both the prepared child and its undo data. */
     static final class Move {
         int from, to, tile, group, symmetricGroup;
+        int traceId;
         int oldIndex, index, oldSymmetricIndex, symmetricIndex;
         int oldValue, value, oldSymmetricValue, symmetricValue;
         int oldDirect, direct, oldSymmetric, symmetric, heuristic, limit;

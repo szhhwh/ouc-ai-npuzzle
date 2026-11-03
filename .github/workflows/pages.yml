@@ -26,21 +26,26 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    defaults:
+      run:
+        working-directory: visualization
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Test replay model
+        run: bun run test
+      - name: Build single-file site
+        run: bun run build
       - name: Configure Pages
         uses: actions/configure-pages@v5
-      - name: Stage latest website assets only
-        run: |
-          mkdir -p "${{ runner.temp }}/npuzzle-pages"
-          for asset in index.html style.css study.css app.js results.js examples.js search-trace.js search-lab.js; do
-            cp "visualization/$asset" "${{ runner.temp }}/npuzzle-pages/$asset"
-          done
       - name: Upload visualization
         uses: actions/upload-pages-artifact@v4
         with:
-          path: ${{ runner.temp }}/npuzzle-pages
+          path: visualization/dist
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
