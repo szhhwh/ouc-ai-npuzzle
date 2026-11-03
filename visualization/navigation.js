@@ -43,6 +43,7 @@
   document.addEventListener("keydown", (event) => {
     if (
       event.defaultPrevented ||
+      document.getElementById("library-dialog").open ||
       event.altKey ||
       event.ctrlKey ||
       event.metaKey ||

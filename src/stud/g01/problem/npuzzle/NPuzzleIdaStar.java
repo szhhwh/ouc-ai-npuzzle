@@ -9,6 +9,19 @@ import java.util.Deque;
 /** N-Puzzle 的增量 PDB IDA*。3 阶使用乘积编码 3-3-2，4 阶使用无损连通分量编码 7-8。 */
 public final class NPuzzleIdaStar extends AbstractSearcher {
 
+    /** Export observations copy boards only when explicitly enabled. */
+    public interface Observer {
+        int root(byte[] board, int h, int bound, int iteration);
+
+        int child(int parent, byte[] board, int blank, int target, int g, int h, String status);
+
+        void visit(int id, boolean found, int bound, int iteration);
+
+        void prune(int id, String status);
+    }
+
+    private final Observer observer;
+
     /** f 值的正无穷哨兵，dfs 返回它表示本子树没有因 f 超过界限而被剪枝的结点 */
     private static final int INFINITY = Integer.MAX_VALUE;
 
@@ -20,7 +33,12 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
     /** 增量搜索自行维护当前路径，不使用框架的 Frontier。 */
     public NPuzzleIdaStar() {
+        this(null);
+    }
+
+    public NPuzzleIdaStar(Observer observer) {
         super(null);
+        this.observer = observer;
     }
 
     /**
@@ -39,6 +57,10 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
         Node root = problem.root();
         if (problem.goal(root.getState())) {
+            if (observer != null) {
+                int id = observer.root(((PuzzleBoard) root.getState()).cells(), 0, 0, 0);
+                observer.visit(id, true, 0, 0);
+            }
             return generatePath(root);
         }
 
@@ -53,7 +75,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                                     initial.size() + " 阶未定义增量 PDB（仅支持 3/4 阶）");
                 };
         if (workspace == null) workspace = new Workspace();
-        Search search = new Search(context, transpositions, workspace);
+        Search search = new Search(context, transpositions, workspace, observer);
         search.run(initial.permutationParity() ^ goal.permutationParity());
 
         nodesGenerated = search.generated;
@@ -111,6 +133,10 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         private boolean cacheActive;
         int[] foundMoves;
         private int generated, expanded;
+        private final Observer observer;
+        private final int[] tracePath;
+        private final PdbContext.Move traceMove;
+        private int iteration;
 
         Search(PdbContext context) {
             this(context, new Transpositions());
@@ -121,8 +147,19 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         }
 
         Search(PdbContext context, Transpositions transpositions, Workspace workspace) {
+            this(context, transpositions, workspace, null);
+        }
+
+        Search(
+                PdbContext context,
+                Transpositions transpositions,
+                Workspace workspace,
+                Observer observer) {
             this.context = context;
             this.transpositions = transpositions;
+            this.observer = observer;
+            tracePath = observer == null ? null : new int[MAX_DEPTH + 1];
+            traceMove = observer == null ? null : new PdbContext.Move();
             moves = workspace.moves;
             candidates = workspace.candidates;
             pathSet = workspace.pathSet;
@@ -136,12 +173,15 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
             while (foundMoves == null) {
                 if (cacheActive) transpositions.clear();
+                if (observer != null)
+                    tracePath[0] = observer.root(context.board, h0, bound, iteration);
                 int nextBound = cacheActive ? dfsGraph(0, bound, -1) : dfsTree(0, bound, -1);
                 if (nextBound == INFINITY) {
                     return; // 搜遍全树仍未找到目标，可解性已经检查过，实际不会走到这里
                 }
                 // 界限与解长奇偶不符时这一层必然无解，直接抬到下一个同奇偶的界限
                 bound = ((nextBound ^ parity) & 1) != 0 ? nextBound + 1 : nextBound;
+                iteration++;
             }
         }
 
@@ -163,9 +203,11 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             // The root bound covers h(root); every child was already checked before apply.
             if (context.isGoal()) {
                 foundMoves = Arrays.copyOf(moves, depth);
+                if (observer != null) observer.visit(tracePath[depth], true, bound, iteration);
                 return INFINITY;
             }
             expanded++;
+            if (observer != null) observer.visit(tracePath[depth], false, bound, iteration);
             pathSet.add(context.code);
             PdbContext.Move[] level = candidates[depth];
             if (level == null) {
@@ -176,10 +218,26 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             int n = 0, min = INFINITY;
             for (int t : context.neighbors[context.blank]) {
                 generated++;
-                if (t == previousBlank) continue;
+                if (t == previousBlank) {
+                    observeSkipped(depth, t, "cycle-pruned");
+                    continue;
+                }
                 long childCode = context.codeAfterMove(t);
-                if (pathSet.contains(childCode)) continue;
+                if (pathSet.contains(childCode)) {
+                    observeSkipped(depth, t, "cycle-pruned");
+                    continue;
+                }
                 int childF = depth + 1 + context.prepare(t, childCode, level[n], bound - depth - 1);
+                if (observer != null)
+                    level[n].traceId =
+                            observer.child(
+                                    tracePath[depth],
+                                    context.board,
+                                    context.blank,
+                                    t,
+                                    depth + 1,
+                                    level[n].heuristic,
+                                    childF > bound ? "bound-pruned" : "frontier");
                 if (childF > bound) {
                     min = Math.min(min, childF);
                     continue;
@@ -199,6 +257,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 PdbContext.Move move = level[i];
                 context.apply(move);
                 moves[depth] = move.to;
+                if (observer != null) tracePath[depth + 1] = move.traceId;
                 int result = dfsTree(depth + 1, bound, move.from);
                 context.undo(move);
                 if (foundMoves != null) {
@@ -215,10 +274,15 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         private int dfsGraph(int depth, int bound, int previousBlank) {
             if (context.isGoal()) {
                 foundMoves = Arrays.copyOf(moves, depth);
+                if (observer != null) observer.visit(tracePath[depth], true, bound, iteration);
                 return INFINITY;
             }
-            if (transpositions.visit(context.code, depth)) return INFINITY;
+            if (transpositions.visit(context.code, depth)) {
+                if (observer != null) observer.prune(tracePath[depth], "transposition-pruned");
+                return INFINITY;
+            }
             expanded++;
+            if (observer != null) observer.visit(tracePath[depth], false, bound, iteration);
 
             // Count all legal moves as before, but only estimate acyclic candidates.
             PdbContext.Move[] level = candidates[depth];
@@ -231,10 +295,26 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             int min = INFINITY;
             for (int t : context.neighbors[context.blank]) {
                 generated++;
-                if (t == previousBlank) continue;
+                if (t == previousBlank) {
+                    observeSkipped(depth, t, "cycle-pruned");
+                    continue;
+                }
                 long childCode = context.codeAfterMove(t);
-                if (transpositions.dominated(childCode, depth + 1)) continue;
+                if (transpositions.dominated(childCode, depth + 1)) {
+                    observeSkipped(depth, t, "transposition-pruned");
+                    continue;
+                }
                 int childF = depth + 1 + context.prepare(t, childCode, level[n], bound - depth - 1);
+                if (observer != null)
+                    level[n].traceId =
+                            observer.child(
+                                    tracePath[depth],
+                                    context.board,
+                                    context.blank,
+                                    t,
+                                    depth + 1,
+                                    level[n].heuristic,
+                                    childF > bound ? "bound-pruned" : "frontier");
                 if (childF > bound) {
                     min = Math.min(min, childF);
                     continue;
@@ -255,6 +335,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 PdbContext.Move move = level[i];
                 context.apply(move);
                 moves[depth] = move.to;
+                if (observer != null) tracePath[depth + 1] = move.traceId;
                 int r = dfsGraph(depth + 1, bound, move.from);
                 context.undo(move);
                 if (foundMoves != null) {
@@ -266,6 +347,13 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             }
 
             return min;
+        }
+
+        private void observeSkipped(int depth, int target, String status) {
+            if (observer == null) return;
+            int h = context.prepare(target, context.codeAfterMove(target), traceMove);
+            observer.child(
+                    tracePath[depth], context.board, context.blank, target, depth + 1, h, status);
         }
     }
 

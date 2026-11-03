@@ -1,315 +1,251 @@
-/* Replay observations from the real Java queue; no browser search or invented tie-break. */
 (() => {
   "use strict";
-  const $ = (id) => document.getElementById(id);
-  const panel = $("tab-studio");
-  const data = window.NPuzzleJavaTraces;
-  let trace,
-    nodes,
-    shots,
-    root,
-    position = 0,
-    timer,
-    inspected = null,
-    fit = false;
+  const $ = (id) => document.getElementById(id), panel = $("tab-studio");
+  const reasons = {
+    frontier: "保留的候选节点", replaced: "以更低代价替换重复候选",
+    "closed-pruned": "已扩展的重复状态，剪枝", "frontier-pruned": "候选中已有更优状态，剪枝",
+    "cycle-pruned": "返回当前路径中的状态，剪枝", "bound-pruned": "权值超过本轮界限，剪枝",
+    "transposition-pruned": "已有代价更低的访问记录，剪枝",
+  };
+  let record = null, trace = null, nodes = [], shots = [], position = 0, timer = null;
+  let inspected = null, fit = false, oldBoard = null, previousPosition = -1;
+  let completedRound = -1, visible = new Set(), open = new Set(), coords = new Map();
+  let treeList = [], treeWidth = 0, treeHeight = 0, scale = 1, currentId = null, nextId = null, solution = new Set();
+  const viewport = $("tree-viewport"), svg = $("search-tree");
   function stop() {
     clearTimeout(timer);
     timer = null;
     $("play-studio").textContent = "▶ 播放算法";
   }
-  function load() {
+  function accept(id) {
+    const node = nodes[id];
+    if (node.status === "replaced") open.delete(node.reference);
+    if (!node.status.endsWith("-pruned")) open.add(id);
+  }
+  function apply(frame) {
+    if (nodes[frame.current].parent === null) {
+      if (record.algorithm.includes("IDA")) open.clear();
+      visible.add(frame.current);
+    }
+    open.delete(frame.current);
+    for (const id of frame.children) { visible.add(id); accept(id); }
+  }
+  function before(round) {
+    if (round <= completedRound) {
+      visible = new Set([trace.frames[0].current]);
+      open = new Set(visible);
+      completedRound = -1;
+    }
+    while (completedRound < round - 1) apply(trace.frames[++completedRound]);
+  }
+  function load(next) {
+    const changed = record?.id !== next?.id;
+    record = next;
+    $("studio-record").textContent = record ? `${record.name} · ${record.algorithm}` : "尚未选择记录";
+    if (!changed && next) return;
     stop();
-    trace = data.traces.find(
-      (t) =>
-        t.preset === Number($("preset").value) &&
-        t.heuristic === $("heuristic").value,
-    );
-    nodes = new Map(trace.nodes.map((n) => [n.id, n]));
-    root = trace.nodes.find((node) => node.parent === null);
-    shots = [{ phase: "ready", round: -1 }];
-    trace.frames.forEach((frame, round) => {
-      for (const phase of ["f", "g", "pick"]) shots.push({ phase, round });
-      if (frame.found) shots.push({ phase: "goal", round });
-      else {
-        frame.children.forEach((_, child) =>
-          shots.push({ phase: "child", round, child }),
-        );
-        shots.push({ phase: "merge", round });
-      }
-    });
+    trace = record?.trace || null;
+    nodes = trace?.nodes || [];
+    shots = [];
     position = 0;
     inspected = null;
-    $("timeline").max = shots.length - 1;
-    previousTree.clear();
-    previousTreeStep = -1;
     oldBoard = null;
-    render();
+    previousPosition = -1;
+    completedRound = -1;
+    visible = new Set(); open = new Set(); coords = new Map(); treeList = [];
+    $("focus-board").replaceChildren();
+    $("focus-board").classList.toggle("is-empty", !trace);
+    svg.replaceChildren();
+    svg.toggleAttribute("hidden", !trace);
+    $("tree-empty").hidden = !!trace;
+    for (const id of ["play-studio", "previous", "next-studio", "restart", "timeline", "speed-studio", "pruned", "fit-tree", "actual-tree"]) $(id).disabled = !trace;
+    if (trace) {
+      shots.push({ phase: "ready", round: 0 });
+      trace.frames.forEach((frame, round) => {
+        shots.push({ phase: "pick", round });
+        if (frame.found) shots.push({ phase: "goal", round });
+        else {
+          frame.children.forEach((_, child) => shots.push({ phase: "child", round, child }));
+          shots.push({ phase: "merge", round });
+        }
+      });
+      visible.add(trace.frames[0].current); open.add(trace.frames[0].current);
+      $("timeline").max = shots.length - 1;
+      render();
+    } else {
+      $("shot-tag").textContent = "—";
+      $("headline").textContent = "等待导入求解记录";
+      $("explanation-studio").textContent = "在「问题记录」中选择后，查看完整搜索过程。";
+      $("inspect-title").textContent = "节点 —";
+      for (const id of ["cost-g", "cost-h", "cost-f", "node-status"]) $(id).textContent = "—";
+      $("position").textContent = "— / —";
+      $("timeline").max = $("timeline").value = 0;
+      const empty = document.createElement("span");
+      empty.className = "empty-board-label"; empty.textContent = "暂无节点";
+      $("focus-board").append(empty);
+    }
+  }
+  function board(values) {
+    const el = $("focus-board"), n = Math.sqrt(values.length);
+    el.style.setProperty("--n", n);
+    if (!el.children.length) for (let value = 0; value < values.length; value++) {
+      const tile = document.createElement("span");
+      tile.className = `focus-tile ${value ? "" : "blank"}`;
+      tile.dataset.value = value; tile.textContent = value || ""; el.append(tile);
+    }
+    const changes = oldBoard ? values.filter((v, i) => v !== oldBoard[i]).length : 0;
+    el.classList.toggle("instant", changes !== 2);
+    for (const tile of el.children) {
+      const index = values.indexOf(Number(tile.dataset.value)), cell = el.clientWidth / n;
+      tile.style.transform = `translate(${index % n * cell}px,${Math.floor(index / n) * cell}px)`;
+    }
+    el.setAttribute("aria-label", `棋盘 ${values.join(" ")}`);
+    oldBoard = values;
   }
   function render() {
-    if (panel.hidden) return;
-    const shot = shots[position];
-    const frame = trace.frames[shot.round];
-    const phase = shot.phase;
-    const current = frame ? nodes.get(frame.current) : root;
-    let openIds = !frame
-      ? [root.id]
-      : phase === "merge"
-        ? frame.openAfter
-        : frame.openBefore;
-    if (frame && ["child", "goal"].includes(phase)) {
-      openIds = frame.openBefore.filter((id) => id !== frame.current);
-      if (phase === "child") {
-        for (const id of frame.children.slice(0, shot.child + 1)) {
-          const node = nodes.get(id);
-          if (node.status === "replaced")
-            openIds = openIds.filter((old) => old !== node.reference);
-          if (node.status === "frontier" || node.status === "replaced")
-            openIds.push(id);
-        }
-      }
+    if (!trace || panel.hidden) return;
+    const shot = shots[position], frame = trace.frames[shot.round], current = nodes[frame.current];
+    before(shot.round);
+    const shown = new Set(visible), pending = new Set(open);
+    if (current.parent === null) {
+      shown.add(current.id);
+      if (record.algorithm.includes("IDA")) pending.clear();
+      pending.add(current.id);
     }
-    let minF = Infinity;
-    let minG = Infinity;
-    for (const id of openIds) {
-      const node = nodes.get(id);
-      if (node.f < minF) {
-        minF = node.f;
-        minG = node.g;
-      } else if (node.f === minF) minG = Math.min(minG, node.g);
+    const revealed = shot.phase === "child" ? frame.children.slice(0, shot.child + 1) : shot.phase === "merge" ? frame.children : [];
+    if (["child", "merge", "goal"].includes(shot.phase)) pending.delete(current.id);
+    for (const id of revealed) {
+      shown.add(id);
+      const node = nodes[id];
+      if (node.status === "replaced") pending.delete(node.reference);
+      if (!node.status.endsWith("-pruned")) pending.add(id);
     }
+    const focus = nodes[inspected] || (shot.phase === "child" ? nodes[revealed.at(-1)] : current);
+    const depthFirst = record.algorithm.includes("IDA");
     const titles = {
-      ready: "起点进入 Open",
-      f: `先找最小 f = ${minF}`,
-      g: `同 f 时，再选较小 g = ${minG}`,
-      pick: `取出节点 #${current.id}`,
-      child: "计算后继权值",
-      merge: "更新 Open，开始下一轮",
+      ready: "起点进入搜索", pick: depthFirst ? `访问节点 #${current.id}` : `从候选中取出节点 #${current.id}`,
+      child: `生成后继 #${focus.id}`, merge: depthFirst ? "继续深度优先搜索" : "更新候选，进入下一轮",
       goal: `找到目标 · ${current.g} 步`,
     };
     const words = {
       ready: "f = g + h：已走代价 + 剩余估计。",
-      f: "比较 Open 中所有候选的权值。",
-      g: "权值相同，按项目规则比较已走代价。",
-      pick: "从整个 Open 中选择，不限于刚生成的后继。",
-      child: "逐个估值；重复状态按项目规则剪枝。",
-      merge: "保留可用候选，再从全局比较权值。",
-      goal: "金色连线标出最终解路径。",
+      pick: depthFirst ? `按 Java 搜索顺序访问；本轮界限 ${frame.bound ?? "—"}。` : "按 f 升序、再按 g 升序选择；平局展示 Java 队列本次选择。",
+      child: reasons[focus.status] || focus.status,
+      merge: `本轮生成 ${frame.children.length} 个节点，剪枝 ${frame.children.filter((id) => nodes[id].status.endsWith("-pruned")).length} 个。`,
+      goal: "搜索完成，金色连线标出完整解路径。",
     };
-    if (
-      phase === "pick" &&
-      frame.openBefore.filter((id) => {
-        const node = nodes.get(id);
-        return node.f === current.f && node.g === current.g;
-      }).length > 1
-    )
-      words.pick = "f、g 均相同：展示 Java 队列本次选择。";
-    if (position === shots.length - 1 && trace.truncated) {
-      titles.merge = "前 80 轮录制结束";
-      words.merge = "前 80 轮演示结束。";
-    }
-    $("headline").textContent = titles[phase];
-    $("explanation-studio").textContent = words[phase];
-    $("shot-tag").textContent = frame ? `第 ${shot.round + 1} 轮` : "起点";
-
-    const revealed =
-      phase === "child"
-        ? frame.children.slice(0, shot.child + 1)
-        : phase === "merge"
-          ? frame.children
-          : [];
-    const focus =
-      nodes.get(inspected) ||
-      (phase === "child" ? nodes.get(revealed.at(-1)) : current);
+    $("headline").textContent = titles[shot.phase];
+    $("explanation-studio").textContent = words[shot.phase];
+    $("shot-tag").textContent = `${depthFirst ? `迭代 ${frame.iteration + 1} · ` : ""}第 ${shot.round + 1} 轮`;
     $("inspect-title").textContent = `节点 #${focus.id}`;
-    $("cost-g").textContent = focus.g;
-    $("cost-h").textContent = focus.h;
-    $("cost-f").textContent = focus.f;
+    $("cost-g").textContent = focus.g; $("cost-h").textContent = focus.h; $("cost-f").textContent = focus.f;
+    $("node-status").textContent = reasons[focus.status] || focus.status;
     board(focus.board);
-
-    const visible = new Set([root.id]);
-    for (let round = 0; round < shot.round; round++)
-      for (const id of trace.frames[round].children) visible.add(id);
-    for (const id of revealed) visible.add(id);
-    drawTree(visible, new Set(openIds), current, phase === "goal");
+    currentId = current.id;
+    nextId = shot.phase === "merge" ? trace.frames[shot.round + 1]?.current : null;
+    solution = new Set(shot.phase === "goal" ? trace.solution : []);
+    layout(shown, pending);
     $("position").textContent = `${position + 1} / ${shots.length}`;
     $("timeline").value = position;
-    $("previous").disabled = position === 0;
+    $("previous").disabled = $("restart").disabled = position === 0;
     $("next-studio").disabled = position === shots.length - 1;
   }
-  let oldBoard;
-  function board(values) {
-    const el = $("focus-board");
-    if (!el.children.length)
-      for (let v = 0; v < 9; v++) {
-        const tile = document.createElement("span");
-        tile.className = `focus-tile ${v ? "" : "blank"}`;
-        tile.dataset.value = v;
-        tile.textContent = v || "";
-        el.append(tile);
-      }
-    const changes = oldBoard
-      ? values.filter((v, i) => v !== oldBoard[i]).length
-      : 9;
-    el.classList.toggle("instant", changes !== 2);
-    void el.offsetWidth;
-    [...el.children].forEach((tile) => {
-      const i = values.indexOf(Number(tile.dataset.value)),
-        cell = el.clientWidth / 3;
-      tile.style.transform = `translate(${(i % 3) * cell}px,${Math.floor(i / 3) * cell}px)`;
-    });
-    oldBoard = values;
-  }
-  let previousTree = new Set(),
-    previousTreeStep = -1;
-  function drawTree(visible, open, current, goal) {
-    const list = [...visible]
-      .map((id) => nodes.get(id))
-      .filter((n) => $("pruned").checked || !n.status.endsWith("pruned"));
+  let pendingNodes = new Set();
+  function layout(shown, pending) {
+    treeList = [...shown].map((id) => nodes[id]).filter((node) => $("pruned").checked || !node.status.endsWith("-pruned"));
     const byParent = new Map();
-    list.forEach((n) => {
-      if (!byParent.has(n.parent)) byParent.set(n.parent, []);
-      byParent.get(n.parent).push(n);
-    });
-    let leaf = 0;
-    const coords = new Map();
-    function walk(n) {
-      const kids = byParent.get(n.id) || [];
-      kids.forEach(walk);
-      coords.set(n.id, {
-        x: kids.length
-          ? kids.reduce((s, k) => s + coords.get(k.id).x, 0) / kids.length
-          : 54 + leaf++ * 108,
-        y: 64 + n.g * 140,
-      });
+    for (const node of treeList) {
+      if (!byParent.has(node.parent)) byParent.set(node.parent, []);
+      byParent.get(node.parent).push(node);
     }
-    walk(list.find((n) => n.parent === null));
-    const viewport = $("tree-viewport"),
-      naturalWidth = leaf * 108,
-      width = Math.max(viewport.clientWidth, naturalWidth),
-      height = Math.max(140, ...list.map((n) => 64 + n.g * 140 + 64));
-    if (width > naturalWidth)
-      coords.forEach((p) => (p.x += (width - naturalWidth) / 2));
-    const scale = fit
-        ? Math.max(0.8, Math.min(1, viewport.clientWidth / width))
-        : 1,
-      svg = $("search-tree");
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    svg.setAttribute("width", width * scale);
-    svg.setAttribute("height", height * scale);
-    const solution = new Set(goal ? trace.solution : []);
-    svg.innerHTML =
-      list
-        .map((n) => {
-          const p = coords.get(n.parent),
-            c = coords.get(n.id);
-          return p
-            ? `<path class="tree-link ${solution.has(n.id) && solution.has(n.parent) ? "solution" : ""}" d="M${p.x},${p.y + 54} L${c.x},${c.y - 54}"/>`
-            : "";
-        })
-        .join("") +
-      list
-        .map((n) => {
-          const p = coords.get(n.id);
-          const cells = n.board
-            .map(
-              (v, i) =>
-                `<rect class="state-tile ${v ? "" : "empty"}" x="${-29 + (i % 3) * 20}" y="${-30 + Math.floor(i / 3) * 20}" width="18" height="18" rx="2"/>${v ? `<text class="state-value" text-anchor="middle" x="${-20 + (i % 3) * 20}" y="${-17 + Math.floor(i / 3) * 20}">${v}</text>` : ""}`,
-            )
-            .join("");
-          return `<g class="tree-node ${!previousTree.has(n.id) ? "new-node" : ""} ${open.has(n.id) ? "open" : ""} ${n.id === current.id ? "active" : ""} ${n.status.endsWith("pruned") ? "pruned" : ""} ${solution.has(n.id) ? "solution" : ""} ${inspected === n.id ? "inspect" : ""}" transform="translate(${p.x},${p.y})" data-node="${n.id}" tabindex="0" role="button" aria-label="节点 ${n.id}，棋盘 ${n.board.join(" ")}，g ${n.g} h ${n.h} f ${n.f}"><title>#${n.id} · ${n.board.join(" ")} · g ${n.g} + h ${n.h} = f ${n.f}</title><rect class="state-card" x="-44" y="-54" width="88" height="108" rx="8"/><text class="state-id" text-anchor="middle" y="-39">#${n.id}</text>${cells}<text class="state-cost" text-anchor="middle" y="44">g ${n.g} · h ${n.h} · f ${n.f}</text></g>`;
-        })
-        .join("");
-    previousTree = new Set(list.map((n) => n.id));
-    if (previousTreeStep !== position && coords.has(current.id)) {
-      const p = coords.get(current.id);
-      viewport.scrollTo({
-        left: Math.max(0, p.x * scale - viewport.clientWidth / 2),
-        top: Math.max(0, p.y * scale - viewport.clientHeight / 2),
-        behavior: "instant",
-      });
+    coords = new Map();
+    let leaf = 0, maxDepth = 0;
+    const stack = (byParent.get(null) || []).map((node) => [node, false]).reverse();
+    while (stack.length) {
+      const [node, done] = stack.pop(), children = byParent.get(node.id) || [];
+      if (!done && children.length) {
+        stack.push([node, true]);
+        for (let i = children.length - 1; i >= 0; i--) stack.push([children[i], false]);
+      } else {
+        coords.set(node.id, { x: children.length ? children.reduce((sum, child) => sum + coords.get(child.id).x, 0) / children.length : 60 + leaf++ * 116, y: 70 + node.g * 148 });
+        maxDepth = Math.max(maxDepth, node.g);
+      }
     }
-    previousTreeStep = position;
+    const naturalWidth = Math.max(120, leaf * 116);
+    treeWidth = Math.max(viewport.clientWidth, naturalWidth); treeHeight = Math.max(viewport.clientHeight, 144 + maxDepth * 148);
+    const offset = (treeWidth - naturalWidth) / 2;
+    for (const point of coords.values()) point.x += offset;
+    scale = fit ? Math.max(0.15, Math.min(1, viewport.clientWidth / treeWidth)) : 1;
+    pendingNodes = pending;
+    svg.setAttribute("viewBox", `0 0 ${treeWidth} ${treeHeight}`);
+    svg.setAttribute("width", treeWidth * scale); svg.setAttribute("height", treeHeight * scale);
+    if (previousPosition !== position) {
+      const point = coords.get(currentId);
+      if (point) viewport.scrollTo({ left: Math.max(0, point.x * scale - viewport.clientWidth / 2), top: Math.max(0, point.y * scale - viewport.clientHeight / 2), behavior: "instant" });
+    }
+    previousPosition = position;
+    drawTree();
+  }
+  function drawTree() {
+    if (!trace || panel.hidden) return;
+    const left = viewport.scrollLeft / scale - 130, right = (viewport.scrollLeft + viewport.clientWidth) / scale + 130;
+    const top = viewport.scrollTop / scale - 150, bottom = (viewport.scrollTop + viewport.clientHeight) / scale + 150;
+    const onScreen = (p) => p.x >= left && p.x <= right && p.y >= top && p.y <= bottom;
+    const links = [], groups = [], n = Math.sqrt(record.states[0].length), cell = 60 / n;
+    for (const node of treeList) {
+      const point = coords.get(node.id), parent = coords.get(node.parent);
+      if (parent && Math.max(point.x, parent.x) >= left && Math.min(point.x, parent.x) <= right && Math.max(point.y, parent.y) >= top && Math.min(point.y, parent.y) <= bottom)
+        links.push(`<path class="tree-link ${solution.has(node.id) && solution.has(node.parent) ? "solution" : ""}" d="M${parent.x},${parent.y + 54} L${point.x},${point.y - 54}"/>`);
+      if (!onScreen(point)) continue;
+      const cells = node.board.map((value, index) => `<rect class="state-tile ${value ? "" : "empty"}" x="${-30 + index % n * cell}" y="${-30 + Math.floor(index / n) * cell}" width="${cell - 2}" height="${cell - 2}" rx="2"/>${value ? `<text class="state-value" text-anchor="middle" x="${-30 + (index % n + 0.5) * cell - 1}" y="${-30 + (Math.floor(index / n) + 0.7) * cell}" style="font-size:${n === 4 ? 9 : 12}px">${value}</text>` : ""}`).join("");
+      groups.push(`<g class="tree-node ${pendingNodes.has(node.id) ? "open" : ""} ${node.id === currentId ? "active" : ""} ${node.status.endsWith("-pruned") ? "pruned" : ""} ${solution.has(node.id) ? "solution" : ""} ${inspected === node.id ? "inspect" : ""}" transform="translate(${point.x},${point.y})" data-node="${node.id}" tabindex="0" role="button" aria-label="节点 ${node.id}，g ${node.g} h ${node.h} f ${node.f}"><rect class="state-card" x="-47" y="-54" width="94" height="108" rx="8"/><text class="state-id" text-anchor="middle" y="-39">#${node.id}${node.id === nextId ? " · 下一个" : ""}</text>${cells}<text class="state-cost" text-anchor="middle" y="44">g ${node.g} · h ${node.h} · f ${node.f}</text></g>`);
+    }
+    svg.innerHTML = links.join("") + groups.join("");
   }
   function jump(value) {
-    stop();
-    position = Math.max(0, Math.min(shots.length - 1, value));
-    inspected = null;
-    render();
+    if (!trace) return;
+    stop(); position = Math.max(0, Math.min(shots.length - 1, value)); inspected = null; render();
   }
   function tick() {
-    if (position >= shots.length - 1) {
-      stop();
-      return;
-    }
-    timer = setTimeout(
-      () => {
-        position++;
-        inspected = null;
-        render();
-        tick();
-      },
-      Number($("speed-studio").value),
-    );
+    if (panel.hidden || position >= shots.length - 1) return stop();
+    timer = setTimeout(() => { position++; inspected = null; render(); tick(); }, Number($("speed-studio").value));
   }
   function play() {
-    if (timer) {
-      stop();
-      return;
-    }
+    if (!trace || panel.hidden) return;
+    if (timer) return stop();
     if (position === shots.length - 1) position = 0;
-    inspected = null;
-    $("play-studio").textContent = "Ⅱ 暂停";
-    render();
-    tick();
+    inspected = null; $("play-studio").textContent = "Ⅱ 暂停"; render(); tick();
   }
   $("play-studio").onclick = play;
   $("previous").onclick = () => jump(position - 1);
   $("next-studio").onclick = () => jump(position + 1);
   $("restart").onclick = () => jump(0);
   $("timeline").oninput = () => jump(Number($("timeline").value));
-  $("preset").onchange = load;
-  $("heuristic").onchange = load;
-  $("speed-studio").onchange = () => {
-    if (timer) {
-      clearTimeout(timer);
-      tick();
-    }
-  };
+  $("speed-studio").onchange = () => { if (timer) { clearTimeout(timer); tick(); } };
   $("pruned").onchange = render;
-  for (const id of ["fit-tree", "actual-tree"]) {
-    $(id).onclick = () => {
-      fit = id === "fit-tree";
-      $("fit-tree").classList.toggle("active", fit);
-      $("actual-tree").classList.toggle("active", !fit);
-      render();
-    };
-  }
-  panel.addEventListener("click", (event) => {
-    const target = event.target.closest("[data-node]");
-    if (target) {
-      inspected = Number(target.dataset.node);
-      render();
-    }
-  });
+  for (const id of ["fit-tree", "actual-tree"]) $(id).onclick = () => {
+    fit = id === "fit-tree"; $("fit-tree").classList.toggle("active", fit); $("actual-tree").classList.toggle("active", !fit); render();
+  };
+  panel.addEventListener("click", (event) => { const target = event.target.closest("[data-node]"); if (target) { inspected = Number(target.dataset.node); render(); } });
   panel.addEventListener("keydown", (event) => {
-    if (
-      event.target.matches(".tree-node") &&
-      ["Enter", " "].includes(event.key)
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      inspected = Number(event.target.dataset.node);
-      render();
-      panel
-        .querySelector(`[data-node="${inspected}"]`)
-        .focus({ preventScroll: true });
+    if (event.target.matches(".tree-node") && ["Enter", " "].includes(event.key)) {
+      event.preventDefault(); event.stopPropagation(); inspected = Number(event.target.dataset.node); render();
+      panel.querySelector(`[data-node="${inspected}"]`)?.focus({ preventScroll: true });
     }
   });
+  let scrollFrame = null;
+  viewport.addEventListener("scroll", () => { if (scrollFrame === null) scrollFrame = requestAnimationFrame(() => { scrollFrame = null; drawTree(); }); });
+  let drag = null;
+  viewport.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest(".tree-node")) return;
+    drag = { x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
+    viewport.setPointerCapture(event.pointerId);
+  });
+  viewport.addEventListener("pointermove", (event) => { if (drag) { viewport.scrollLeft = drag.left - event.clientX + drag.x; viewport.scrollTop = drag.top - event.clientY + drag.y; } });
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) viewport.addEventListener(type, () => { drag = null; });
   panel.addEventListener("npuzzle:pause", stop);
   panel.addEventListener("npuzzle:play", play);
-  panel.addEventListener("npuzzle:step", (event) =>
-    jump(position + event.detail),
-  );
+  panel.addEventListener("npuzzle:step", (event) => jump(position + event.detail));
   panel.addEventListener("npuzzle:resize", render);
-  load();
+  window.NPuzzleLibrary.subscribe(load);
 })();

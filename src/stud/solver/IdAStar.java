@@ -16,6 +16,20 @@ import java.util.List;
  */
 public class IdAStar extends AbstractSearcher {
 
+    /** Optional export observer. No observer data is allocated during ordinary searches. */
+    public interface Observer {
+        void iteration(Node root, int bound, int iteration);
+
+        void visit(Node node, boolean found, int bound, int iteration);
+
+        void generated(Node parent, List<Node> children, Predictor predictor, State goal);
+
+        void prune(Node node, String status);
+    }
+
+    private final Observer observer;
+    private int iteration;
+
     /** f 值的正无穷哨兵。dfs 返回它表示本子树没有因 f 超过界限而被剪枝的结点，整轮都返回它表示搜索树已穷尽 */
     private static final int INFINITY = Integer.MAX_VALUE;
 
@@ -28,7 +42,12 @@ public class IdAStar extends AbstractSearcher {
     private Node goalNode;
 
     public IdAStar(Frontier frontier, Predictor predictor) {
+        this(frontier, predictor, null);
+    }
+
+    public IdAStar(Frontier frontier, Predictor predictor, Observer observer) {
         super(frontier);
+        this.observer = observer;
         this.predictor = predictor;
         rootPredictor =
                 (state, goal) -> {
@@ -59,9 +78,11 @@ public class IdAStar extends AbstractSearcher {
         // 根结点的 h 值就是初始界限
         Node root = problem.root(rootPredictor);
         int bound = root.getHeuristic();
+        iteration = 0;
 
         while (true) {
             goalNode = null;
+            if (observer != null) observer.iteration(root, bound, iteration);
             // 以当前界限做一轮深度优先搜索，返回下一轮的界限
             int nextBound = dfs(problem, root, bound);
 
@@ -78,6 +99,7 @@ public class IdAStar extends AbstractSearcher {
 
             // 把界限抬到超过当前界限的最小 f 值。nextBound 严格大于 bound，界限单调上升，算法必然终止
             bound = nextBound;
+            iteration++;
         }
     }
 
@@ -94,16 +116,19 @@ public class IdAStar extends AbstractSearcher {
 
         // f 超过界限就剪掉整棵子树，该 f 值作为下一层界限的候选
         if (f > bound) {
+            if (observer != null) observer.prune(node, "bound-pruned");
             return f;
         }
 
         // 目标判定放在扩展之前。目标的 f 超过当前界限时会先被剪枝记入下一层界限，等界限抬上来再访问，不会漏解
         if (problem.goal(node.getState())) {
             goalNode = node;
+            if (observer != null) observer.visit(node, true, bound, iteration);
             return INFINITY;
         }
 
         nodesExpanded++;
+        if (observer != null) observer.visit(node, false, bound, iteration);
 
         // 当前状态加入路径集合，子孙再绕回它就是成环，会被剪掉
         explored.add(node.getState());
@@ -111,11 +136,14 @@ public class IdAStar extends AbstractSearcher {
         List<Node> children = problem.childNodes(node);
         // 计数口径同 BestFirstSearcher：生成的子结点都计数，不论随后是否被剪掉
         nodesGenerated += children.size();
+        if (observer != null) observer.generated(node, children, predictor, goalState);
         // Reject path cycles before evaluating them; use the same child list throughout.
         for (int i = children.size() - 1; i >= 0; i--) {
             Node child = children.get(i);
-            if (explored.contains(child.getState())) children.remove(i);
-            else child.setHeuristic(predictor, goalState);
+            if (explored.contains(child.getState())) {
+                if (observer != null) observer.prune(child, "cycle-pruned");
+                children.remove(i);
+            } else child.setHeuristic(predictor, goalState);
         }
 
         // 子结点按 f 升序排列后再深入。顺序不影响最优性，但先走 f 小的分支通常能更早命中目标
