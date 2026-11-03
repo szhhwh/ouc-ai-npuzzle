@@ -1,9 +1,9 @@
 
-# A* 算法过程动画
+# N-Puzzle 可视化
 
-打开 `visualization/index.html`，无需前端依赖。紧凑页面只展示棋盘与 g/h/f、搜索树两个区域；隐藏说明小字、Open 候选列表与后继面板，不再显示搜索规模曲线。桌面左右排列，窄屏上下排列。
+打开 `visualization/index.html`，无需前端依赖。顶部切换“路径演示”和“算法过程”：前者在浏览器中运行 A* 并回放解路径，也可导入 Java 解路径 JSON；后者回放真实 Java 搜索轨迹，展示棋盘、g/h/f 与搜索树。
 
-支持播放/暂停、单步、进度定位、两种启发函数、节点检查和录屏布局。录屏布局只隐藏设置与说明，不生成视频文件，可用系统录屏录制。
+两个视图独立保存进度，切换时暂停离开的视图。支持播放/暂停、单步、进度定位和两种启发函数；算法过程还支持节点检查、剪枝显示与比例切换。点击视图标签后，可直接用左右方向键单步、空格播放/暂停。录屏布局隐藏设置，不生成视频文件。
 
 ## 真实 Java 轨迹
 
@@ -15,19 +15,24 @@
 
 搜索树展示生成关系；重复状态保留独立节点，可选择显示剪枝。目标真正取出时才显示最终解路径，不提前展示未来节点。分镜间隔是讲解节奏，不是运行耗时。
 
-重新录制（需要项目 JDK/Maven，拒绝覆盖已有输出）：
-
-```sh
-bash scripts/export-search-traces.sh /tmp/new-java-search-traces.js
-```
-
-核验后用新产物替换 `java-search-traces.js`。源版本带 `dirty` 表示录制时包含未提交 Java 源码。
+`java-search-traces.js` 是随页面提供的静态轨迹数据；浏览器只读取它，不会重新求解这些轨迹。
 
 ## 本地预览
 
 直接打开 `visualization/index.html`；或在仓库根目录运行 `python3 -m http.server 8765 --directory visualization`，访问 http://127.0.0.1:8765/。
 
-`visualization/overview.html` 为综合面板。
+前端文件职责：
+
+| 文件 | 职责 |
+| --- | --- |
+| `index.html` | 两个视图的静态结构与控件 |
+| `search-studio.css` | 公共、路径、搜索树样式及响应式布局 |
+| `app.js` | 路径视图状态、浏览器 A*、JSON 校验与回放 |
+| `search-studio.js` | Java 轨迹分镜、节点检查与搜索树绘制 |
+| `navigation.js` | 视图切换、焦点、快捷键、统一暂停与尺寸更新 |
+| `java-search-traces.js` | 预录制的 Java 搜索轨迹 |
+
+视图控制器各自封装状态；`navigation.js` 通过面板上的 `npuzzle:pause`、`npuzzle:play`、`npuzzle:step`（`detail` 为步进方向）和 `npuzzle:resize` 事件调用视图。
 
 # OUC AI N-Puzzle 项目
 
@@ -121,5 +126,5 @@ n  <n*n 个初始状态数字>  <n*n 个目标状态数字>
 
 ## 网页可视化与实验导出
 
-打开 `visualization/index.html` 可查看 A* 算法过程动画；综合面板位于 `visualization/overview.html`。使用 `bash scripts/export-visualization.sh` 导出 Java 求解结果。
+打开 `visualization/index.html` 查看路径与搜索过程。使用 `bash scripts/export-visualization.sh` 导出 Java 求解结果；路径视图导入的是包含 `states` 的单条 JSON 记录，批量导出文件需取 `results` 数组中的一条记录另存后导入。
 

@@ -1,291 +1,100 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>N-Puzzle · 搜索算法可视化</title>
-  <link rel="stylesheet" href="search-studio.css" />
-  
-  <style>
-    .masthead {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 24px;
-        background: #ffffff;
-        border-bottom: 1px solid #e2e8f0;
-    }
-    .masthead > div {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-    }
-    .tab-nav {
-        display: flex;
-        gap: 6px;
-        margin-left: 20px;
-    }
-    .tab-btn {
-        background: transparent;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        color: #64748b;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-    .tab-btn:hover {
-        background: #f1f5f9;
-        color: #1e293b;
-    }
-    .tab-btn.active {
-        background: #004494 !important; 
-        color: #ffffff !important;
-    }
-    
-    .tab-content {
-        opacity: 0;
-        pointer-events: none;
-        position: absolute;
-        width: 100%;
-        top: 60px;
-        left: 0;
-        z-index: -1;
-        padding-top: 20px;
-    }
-    .tab-content.active {
-        opacity: 1;
-        pointer-events: auto;
-        position: relative;
-        z-index: 1;
-        top: 0;
-    }
-
-    .overview-wrap .workspace {
-        display: grid;
-        grid-template-columns: 1fr 340px;
-        gap: 20px;
-        align-items: start;
-    }
-    .overview-wrap .board-panel,
-    .overview-wrap .card {
-        background: #ffffff !important;
-        border-radius: 12px !important;
-        padding: 20px !important;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06) !important;
-        border: 1px solid #e2e8f0 !important;
-    }
-
-    .overview-wrap .board {
-        position: relative !important;
-        width: 260px !important;
-        height: 260px !important;
-        margin: 20px auto !important;
-        background: #f1f5f9 !important;
-        border-radius: 10px !important;
-        padding: 14px !important;
-        display: block !important; 
-    }
-
-    .overview-wrap .board .tile {
-        position: absolute !important;
-        width: 72px !important; 
-        height: 72px !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-        
-        background: #004494 !important; 
-        color: #ffffff !important;
-        font-size: 32px !important;
-        font-weight: bold !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 6px rgba(0, 68, 148, 0.2) !important;
-        
-        margin-top: 2px !important;
-        margin-left: 2px !important;
-        
-        transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
-    }
-
-    .overview-wrap .board .tile.moved {
-        background: #f59e0b !important; 
-    }
-    
-    .overview-wrap .transport {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 16px;
-    }
-    .overview-wrap .transport button {
-        border: 1px solid #e2e8f0;
-        background: #ffffff;
-        border-radius: 6px;
-        padding: 8px 12px;
-        cursor: pointer;
-        color: #334155;
-        font-size: 14px;
-    }
-    .overview-wrap .transport .play {
-        background: #004494 !important;
-        color: white !important;
-        border-color: #004494 !important;
-        flex: 1;
-    }
-    .overview-wrap .timeline-label {
-        display: flex;
-        justify-content: space-between;
-        font-size: 13px;
-        color: #64748b;
-        margin-bottom: 8px;
-    }
-    .overview-wrap input[type="range"] {
-        width: 100%;
-        accent-color: #004494;
-    }
-
-    .overview-wrap label {
-        display: block;
-        font-size: 13px;
-        color: #475569;
-        margin: 12px 0 6px;
-    }
-    .overview-wrap select {
-        width: 100%;
-        padding: 8px 10px;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        background: white;
-    }
-    .overview-wrap .segmented {
-        display: flex;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-    .overview-wrap .segmented button {
-        flex: 1;
-        border: none;
-        background: white;
-        padding: 8px;
-        cursor: pointer;
-        color: #475569;
-        font-size: 13px;
-    }
-    .overview-wrap .segmented button.selected {
-        background: #004494 !important;
-        color: white !important;
-    }
-    
-    .overview-wrap .metric-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-    }
-    .overview-wrap .metric-grid div {
-        text-align: center;
-        padding: 10px;
-        background: #f8fafc;
-        border-radius: 8px;
-    }
-    .overview-wrap .metric-grid strong {
-        font-size: 18px;
-        color: #004494 !important; 
-    }
-
-    .intro, 
-    .title-row, 
-    .provenance, 
-    .small, 
-    .hint, 
-    #move-label, 
-    .stage-caption, 
-    .settings .eyebrow, 
-    .speed label,
-    .study, 
-    .explanation, 
-    footer {
-        display: none !important;
-    }
-
-    #status { 
-        display: none !important; 
-    }
-
-    #move-label { 
-        display: none !important; 
-    }
-
-    .orange-dot { 
-        display: none !important; 
-    }
-
-    .timeline-ends {
-        display: none !important;
-    }
-  </style>
-</head>
-
-<body class="compact">
-  <header class="masthead">
-    <div style="display: flex; align-items: center;">
-      <a class="brand" href="./">N<span>·</span>PUZZLE</a>
-      <div class="tab-nav">
-        <button class="tab-btn active" data-tab="overview">路径演示</button>
-        <button class="tab-btn" data-tab="studio">算法过程</button>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>N-Puzzle · 搜索算法可视化</title>
+    <link rel="stylesheet" href="search-studio.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="header-navigation">
+        <a class="brand" href="./">N<span>·</span>PUZZLE</a>
+        <div class="tab-nav" role="tablist" aria-label="可视化视图">
+          <button
+            id="tab-button-overview"
+            class="tab-btn active"
+            type="button"
+            role="tab"
+            aria-controls="tab-overview"
+            aria-selected="true"
+          >
+            路径演示
+          </button>
+          <button
+            id="tab-button-studio"
+            class="tab-btn"
+            type="button"
+            role="tab"
+            aria-controls="tab-studio"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            算法过程
+          </button>
+        </div>
       </div>
-    </div>
+      <div class="header-actions">
+        <a
+          class="header-link"
+          href="https://github.com/szhhwh/ouc-ai-npuzzle"
+          target="_blank"
+          rel="noreferrer"
+          >项目仓库 ↗</a
+        >
+        <button id="cinema" type="button" aria-pressed="false">录屏布局</button>
+      </div>
+    </header>
 
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <a 
-        class="header-link" 
-        href="https://github.com/szhhwh/ouc-ai-npuzzle" 
-        target="_blank" 
-        rel="noreferrer"
-        style="font-size: 13px; color: #64748b; text-decoration: none;"
-      >项目仓库 ↗</a>
-      <button id="cinema">录屏布局</button>
-    </div>
-  </header>
-
-  <main>
-    <div id="tab-overview" class="tab-content active overview-wrap">
-
-      <div class="workspace">
-        <section class="board-panel">
-          <div class="panel-top">
-            <span class="panel-label">解路径演示 <span class="tag">8-PUZZLE</span></span>
-            <span id="status" class="status"></span>
-          </div>
-
-          <div class="board-stage">
-            <span class="stage-caption">INITIAL STATE → GOAL STATE</span>
-            <div id="board" class="board" aria-label="数码棋盘"></div>
-            <div class="board-caption">
-              <span class="orange-dot"></span>
-              <span id="move-label">空格记为留白 · 点击播放，开始探索</span>
+    <main>
+      <div
+        id="tab-overview"
+        class="tab-content"
+        role="tabpanel"
+        aria-labelledby="tab-button-overview"
+        tabindex="-1"
+      >
+        <div class="workspace">
+          <section class="board-panel" aria-label="解路径演示">
+            <div class="panel-label">
+              解路径演示 <span class="tag">8-PUZZLE</span>
             </div>
-          </div>
+            <div id="board" class="board" aria-label="数码棋盘"></div>
 
-          <div class="transport">
-            <button id="reset" title="回到起点" aria-label="回到起点">↺</button>
-            <button id="prev" title="上一步" aria-label="上一步">←</button>
-            <button id="play" class="play">▶ <span>播放路径</span></button>
-            <button id="next" title="下一步" aria-label="下一步">→</button>
-            <div class="speed">
-              <label for="speed">速度</label>
-              <select id="speed">
+            <div class="transport path-transport">
+              <button
+                id="reset"
+                type="button"
+                title="回到起点"
+                aria-label="回到起点"
+              >
+                ↺
+              </button>
+              <button
+                id="prev"
+                type="button"
+                title="上一步"
+                aria-label="上一步"
+              >
+                ←
+              </button>
+              <button id="play" class="play" type="button">
+                ▶ <span>播放路径</span>
+              </button>
+              <button
+                id="next"
+                type="button"
+                title="下一步"
+                aria-label="下一步"
+              >
+                →
+              </button>
+              <select id="speed" aria-label="路径播放速度">
                 <option value="1000">0.5×</option>
                 <option value="500" selected>1×</option>
                 <option value="250">2×</option>
               </select>
             </div>
-          </div>
-
-          <div class="timeline">
             <div class="timeline-label">
               <span>路径进度</span>
               <span><b id="step">00</b> / <span id="total">21</span> 步</span>
@@ -298,137 +107,120 @@
               value="0"
               aria-label="跳转到指定步数"
             />
-            <div class="timeline-ends">
-              <span>初始状态</span>
-              <span id="timeline-end">目标状态</span>
-            </div>
-          </div>
+          </section>
+
+          <aside class="overview-sidebar">
+            <section class="settings">
+              <h2>探索设置</h2>
+              <label for="sample">选择实例</label>
+              <select id="sample">
+                <option value="imported" disabled>已导入的路径</option>
+                <option value="0">课程实例 01 · 21 步</option>
+                <option value="1">课程实例 02 · 31 步</option>
+                <option value="2">课程实例 03 · 31 步</option>
+              </select>
+
+              <label>搜索算法</label>
+              <div class="algorithm">
+                <span id="algorithm-name">A*</span>
+                <span id="algorithm-tag" class="tiny-tag">最优搜索</span>
+              </div>
+              <label>启发函数（内置演示设置）</label>
+              <div class="segmented" role="group" aria-label="路径启发函数">
+                <button id="manhattan" class="selected" type="button">
+                  曼哈顿距离
+                </button>
+                <button id="misplaced" type="button">错位将牌数</button>
+              </div>
+              <button id="solve" class="solve" type="button">
+                重新求解 <span>↗</span>
+              </button>
+              <button id="import" class="import" type="button">
+                ＋ 导入 Java 解路径 JSON
+              </button>
+              <input
+                id="file"
+                type="file"
+                accept="application/json,.json"
+                hidden
+              />
+              <p id="message" class="message" role="status"></p>
+            </section>
+
+            <section class="metrics">
+              <div class="metrics-heading">
+                <h2>搜索记录</h2>
+                <span id="source">浏览器 A* 演示</span>
+              </div>
+              <div class="metric-grid">
+                <div>
+                  <span>解路径长度</span>
+                  <strong id="length">—<small>步</small></strong>
+                </div>
+                <div>
+                  <span>求解耗时</span>
+                  <strong id="time">—<small>ms</small></strong>
+                </div>
+                <div>
+                  <span>生成节点</span> <strong id="generated">—</strong>
+                </div>
+                <div>
+                  <span>扩展节点</span> <strong id="expanded">—</strong>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+
+      <div
+        id="tab-studio"
+        class="tab-content"
+        role="tabpanel"
+        aria-labelledby="tab-button-studio"
+        tabindex="-1"
+        hidden
+      >
+        <section class="controls" aria-label="演示设置">
+          <label
+            >实例
+            <select id="preset">
+              <option value="0">入门 · 2 步</option>
+              <option value="1" selected>分支探索 · 8 步</option>
+              <option value="2">课程实例 · 前 80 轮</option>
+            </select>
+          </label>
+          <label
+            >启发函数
+            <select id="heuristic">
+              <option value="MANHATTAN">曼哈顿距离</option>
+              <option value="MISPLACED">错位数</option>
+            </select>
+          </label>
+          <label
+            >节奏
+            <select id="speed-studio">
+              <option value="1800">细讲</option>
+              <option value="1000" selected>标准</option>
+              <option value="350">快览</option>
+            </select>
+          </label>
+          <button id="restart" type="button">↺ 重来</button>
         </section>
 
-        <aside>
-          <section class="settings card">
-            <p class="eyebrow">CONFIGURATION</p>
-            <h2>探索设置</h2>
-
-            <label for="sample">选择实例</label>
-            <select id="sample">
-              <option value="imported" disabled>已导入的路径</option>
-              <option value="0">课程实例 01 · 21 步</option>
-              <option value="1">课程实例 02 · 31 步</option>
-              <option value="2">课程实例 03 · 31 步</option>
-            </select>
-
-            <label>搜索算法</label>
-            <div class="algorithm">
-              <span id="algorithm-name">A*</span>
-              <span id="algorithm-tag" class="tiny-tag">最优搜索</span>
-            </div>
-
-            <label>启发函数（内置演示设置）</label>
-            <div class="segmented">
-              <button id="manhattan" class="selected">曼哈顿距离</button>
-              <button id="misplaced">错位将牌数</button>
-            </div>
-            <p id="heuristic-note" class="hint">
-              所有数字块与目标位置的横纵距离之和，不计空格。
-            </p>
-
-            <button id="solve" class="solve">重新求解 <span>↗</span></button>
-            <button id="import" class="import">＋ 导入 Java 解路径 JSON</button>
-            <input id="file" type="file" accept="application/json,.json" hidden />
-            <p id="message" class="message" role="status"></p>
-          </section>
-
-          <section class="metrics card">
-            <div class="metrics-heading">
-              <h2>搜索记录</h2>
-              <span id="source">浏览器 A* 演示</span>
-            </div>
-            <div class="metric-grid">
-              <div>
-                <span>解路径长度</span>
-                <strong id="length">—<small>步</small></strong>
-              </div>
-              <div>
-                <span>求解耗时</span>
-                <strong id="time">—<small>ms</small></strong>
-              </div>
-              <div><span>生成节点</span><strong id="generated">—</strong></div>
-              <div><span>扩展节点</span><strong id="expanded">—</strong></div>
-            </div>
-            <p id="metrics-note" class="hint">
-              演示耗时取自当前浏览器；Java 实验数据请通过 JSON 导入。
-            </p>
-          </section>
-        </aside>
-      </div>
-    </div>
-
-    <div id="tab-studio" class="tab-content">
-
-      <section class="controls" aria-label="演示设置">
-        <label>实例
-          <select id="preset">
-            <option value="0">入门 · 2 步</option>
-            <option value="1" selected>分支探索 · 8 步</option>
-            <option value="2">课程实例 · 前 80 轮</option>
-          </select>
-        </label>
-        <label>启发函数
-          <select id="heuristic">
-            <option value="MANHATTAN">曼哈顿距离</option>
-            <option value="MISPLACED">错位数</option>
-          </select>
-        </label>
-        <label>节奏
-          <select id="speed-studio">
-            <option value="1800">细讲</option>
-            <option value="1000" selected>标准</option>
-            <option value="350">快览</option>
-          </select>
-        </label>
-        <button id="restart">↺ 重来</button>
-      </section>
-
-      <section class="film" aria-label="A* 算法动画">
-        <div id="phase-strip" class="phase-strip">
-          <span data-phase="f">① 比 f</span>
-          <span data-phase="g">② 同 f 比 g</span>
-          <span data-phase="pick">③ 取出</span>
-          <span data-phase="child">④ 展开与剪枝</span>
-          <span data-phase="merge">⑤ 回到 Open</span>
-        </div>
-
-        <div class="narration">
-          <span id="shot-tag">起点</span>
-          <h2 id="headline">将起点放入 Open。</h2>
-          <p id="explanation-studio" role="status"></p>
-        </div>
-
-        <div class="arena">
-          <div class="main-column">
-            <section class="open-panel">
-              <div class="panel-heading">
-                <h3>Open · 待选节点</h3>
-                <button id="show-open" class="text-button">展开全部</button>
-              </div>
-              <p id="open-caption" class="small"></p>
-              <div id="open-list" class="open-list"></div>
-            </section>
-
-            <section class="expansion-panel">
-              <div class="panel-heading">
-                <h3 id="expansion-title">当前节点 → 后继</h3>
-                <span class="small">U / D / L / R：空格方向</span>
-              </div>
-              <div id="expansion" class="expansion"></div>
-            </section>
+        <section class="film" aria-label="A* 算法动画">
+          <div class="narration">
+            <span id="shot-tag">起点</span>
+            <h2 id="headline">将起点放入 Open。</h2>
+            <p id="explanation-studio" role="status"></p>
           </div>
-
           <aside class="inspector">
-            <p id="inspect-kicker" class="eyebrow">NODE INSPECTOR</p>
             <h3 id="inspect-title">起点 #0</h3>
-            <div id="focus-board" class="focus-board" aria-label="当前查看的棋盘"></div>
+            <div
+              id="focus-board"
+              class="focus-board"
+              aria-label="当前查看的棋盘"
+            ></div>
             <div class="equation" aria-label="节点权值">
               <div class="g"><small>已走 g</small><b id="cost-g">0</b></div>
               <span>+</span>
@@ -436,79 +228,48 @@
               <span>=</span>
               <div class="f"><small>权值 f</small><b id="cost-f">8</b></div>
             </div>
-            <p id="heuristic-proof" class="small"></p>
-            <div id="comparison-proof" class="comparison-proof"></div>
-            <p id="inspect-note" class="small"></p>
           </aside>
-        </div>
-
-        <section class="tree-panel">
-          <div class="panel-heading">
-            <div>
+          <section class="tree-panel" aria-label="搜索树">
+            <div class="panel-heading">
               <h3>搜索树</h3>
-              <p class="small">
-                蓝色：当前 · 青色：Open · 灰色：已展开 · 金色：解路径
-              </p>
+              <div class="tree-tools">
+                <label><input id="pruned" type="checkbox" />显示剪枝</label>
+                <button id="fit-tree" type="button">缩览树</button>
+                <button id="actual-tree" class="active" type="button">
+                  原始比例
+                </button>
+              </div>
             </div>
-            <div class="tree-tools">
-              <label><input id="pruned" type="checkbox" />显示剪枝</label>
-              <button id="fit-tree">缩览树</button>
-              <button id="actual-tree" class="active">原始比例</button>
+            <div id="tree-viewport" class="tree-viewport">
+              <svg
+                id="search-tree"
+                role="img"
+                aria-label="逐步展开的 Java 搜索树"
+              ></svg>
             </div>
+          </section>
+          <div class="transport studio-transport">
+            <button id="previous" type="button">← 上一步</button>
+            <button id="play-studio" class="primary" type="button">
+              ▶ 播放算法
+            </button>
+            <button id="next-studio" type="button">下一步 →</button>
+            <span id="position"></span>
+            <input
+              id="timeline"
+              type="range"
+              min="0"
+              value="0"
+              aria-label="动画进度"
+            />
           </div>
-          <div id="tree-viewport" class="tree-viewport">
-            <svg id="search-tree" role="img" aria-label="逐步展开的 Java 搜索树"></svg>
-          </div>
-          <p id="tree-note" class="small"></p>
         </section>
+      </div>
+    </main>
 
-        <div class="transport">
-          <button id="previous">← 上一步</button>
-          <button id="play-studio" class="primary">▶ 播放算法</button>
-          <button id="next-studio">下一步 →</button>
-          <span id="position"></span>
-          <input id="timeline" type="range" min="0" value="0" aria-label="动画进度" />
-        </div>
-      </section>
-    </div>
-  </main>
-
-  <script src="examples.js"></script>
-  <script src="app.js"></script>
-
-  <script src="java-search-traces.js"></script>
-  <script src="search-studio.js?v=20261030-states2"></script>
-
-  <script>
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const tabContents = document.querySelectorAll('.tab-content');
-
-    tabBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetTab = btn.dataset.tab;
-        
-        tabBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        tabContents.forEach(content => content.classList.remove('active'));
-        document.getElementById(`tab-${targetTab}`).classList.add('active');
-
-        setTimeout(() => {
-          window.dispatchEvent(new Event('resize'));
-          if(targetTab === 'overview') {
-            document.getElementById('manhattan').click(); 
-          }
-        }, 50);
-      });
-    });
-
-    window.addEventListener('load', () => {
-        setTimeout(() => {
-            window.dispatchEvent(new Event('resize'));
-            const defaultBtn = document.getElementById('manhattan');
-            if(defaultBtn) defaultBtn.click();
-        }, 200);
-    });
-  </script>
-</body>
+    <script src="app.js"></script>
+    <script src="java-search-traces.js"></script>
+    <script src="search-studio.js"></script>
+    <script src="navigation.js"></script>
+  </body>
 </html>
