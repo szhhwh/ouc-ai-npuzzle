@@ -3,143 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>N-Puzzle · 搜索算法可视化</title>
-    <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="search-studio.css" />
+    <meta name="theme-color" content="#e7edec" />
+    <title>N-Puzzle · 搜索过程可视化</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231b3448'/%3E%3Crect x='5' y='5' width='10' height='10' rx='2' fill='%23f5f2e9'/%3E%3Crect x='17' y='5' width='10' height='10' rx='2' fill='%23f5f2e9'/%3E%3Crect x='5' y='17' width='10' height='10' rx='2' fill='%23b07c12'/%3E%3C/svg%3E"
+    />
   </head>
   <body>
-    <header class="masthead">
-      <div class="header-navigation">
-        <a class="brand" href="./">N<span>·</span>PUZZLE</a>
-        <div class="tab-nav" role="tablist" aria-label="可视化视图">
-          <button id="tab-button-overview" class="tab-btn active" type="button" role="tab" aria-controls="tab-overview" aria-selected="true">路径演示</button>
-          <button id="tab-button-studio" class="tab-btn" type="button" role="tab" aria-controls="tab-studio" aria-selected="false" tabindex="-1">算法过程</button>
-        </div>
-      </div>
-      <div class="header-actions">
-        <button id="library-open" class="library-trigger" type="button" aria-haspopup="dialog" aria-controls="library-dialog">
-          <span class="library-trigger-label">问题记录</span>
-          <span id="current-record-name">导入与选择</span>
-          <span id="library-count" class="record-count">0</span>
-          <span aria-hidden="true">↗</span>
-        </button>
-        <button id="cinema" type="button" aria-pressed="false">录屏布局</button>
-      </div>
-    </header>
-    <p id="library-feedback" class="global-feedback" role="status" hidden></p>
-    <main>
-      <div id="tab-overview" class="tab-content" role="tabpanel" aria-labelledby="tab-button-overview" tabindex="-1">
-        <div class="workspace">
-          <section class="board-panel" aria-label="解路径演示">
-            <div class="panel-label">解路径 <span id="puzzle-tag" class="tag">— PUZZLE</span></div>
-            <div id="board" class="board is-empty" aria-label="数码棋盘"><span class="empty-board-label">尚未导入记录</span></div>
-            <div class="transport path-transport">
-              <button id="reset" type="button" title="回到起点" aria-label="回到起点" disabled>↺</button>
-              <button id="prev" type="button" title="上一步" aria-label="上一步" disabled>←</button>
-              <button id="play" class="play" type="button" disabled>▶ <span>播放路径</span></button>
-              <button id="next" type="button" title="下一步" aria-label="下一步" disabled>→</button>
-              <select id="speed" aria-label="路径播放速度" disabled>
-                <option value="1000">0.5×</option><option value="500" selected>1×</option><option value="250">2×</option>
-              </select>
-            </div>
-            <div class="timeline-label"><span>路径进度</span><span><b id="step">—</b> / <span id="total">—</span> 步</span></div>
-            <input id="progress" type="range" min="0" max="0" value="0" aria-label="跳转到指定步数" disabled />
-          </section>
-          <aside class="overview-sidebar">
-            <section class="record-details" aria-label="当前记录">
-              <span class="section-label">当前问题</span>
-              <h1 id="record-title">尚未导入记录</h1>
-              <dl class="record-facts">
-                <div><dt>搜索算法</dt><dd id="algorithm-name">—</dd></div>
-                <div><dt>启发函数</dt><dd id="heuristic-name">—</dd></div>
-                <div><dt>目标棋盘</dt><dd id="goal-size">—</dd></div>
-              </dl>
-              <p id="record-hint" class="muted">从顶部「问题记录」导入 Java 导出文件。</p>
-            </section>
-            <section class="metrics" aria-label="搜索记录">
-              <div class="metrics-heading"><h2>搜索记录</h2><span id="source">—</span></div>
-              <div class="metric-grid">
-                <div><span>解路径长度</span><strong id="length">—</strong></div>
-                <div><span>求解耗时</span><strong id="time">—</strong></div>
-                <div><span>生成节点</span><strong id="generated">—</strong></div>
-                <div><span>扩展节点</span><strong id="expanded">—</strong></div>
-              </div>
-            </section>
-          </aside>
-        </div>
-      </div>
-      <div id="tab-studio" class="tab-content" role="tabpanel" aria-labelledby="tab-button-studio" tabindex="-1" hidden>
-        <section class="controls" aria-label="过程播放设置">
-          <span id="studio-record" class="studio-record">尚未选择记录</span>
-          <label>节奏 <select id="speed-studio" disabled><option value="1800">细讲</option><option value="1000" selected>标准</option><option value="350">快览</option></select></label>
-          <button id="restart" type="button" disabled>↺ 重来</button>
-        </section>
-        <section class="film" aria-label="搜索过程动画">
-          <div class="narration">
-            <span id="shot-tag">—</span>
-            <h2 id="headline">等待导入求解记录</h2>
-            <p id="explanation-studio" role="status">在「问题记录」中选择后，查看完整搜索过程。</p>
-          </div>
-          <aside class="inspector">
-            <h3 id="inspect-title">节点 —</h3>
-            <div id="focus-board" class="focus-board is-empty" aria-label="当前查看的棋盘"><span class="empty-board-label">暂无节点</span></div>
-            <div class="equation" aria-label="节点权值">
-              <div class="g"><small>已走 g</small><b id="cost-g">—</b></div><span>+</span>
-              <div class="h"><small>估计 h</small><b id="cost-h">—</b></div><span>=</span>
-              <div class="f"><small>权值 f</small><b id="cost-f">—</b></div>
-            </div>
-            <p id="node-status" class="node-status">—</p>
-          </aside>
-          <section class="tree-panel" aria-label="搜索树">
-            <div class="panel-heading"><h3>搜索树</h3><div class="tree-tools">
-              <label><input id="pruned" type="checkbox" disabled />显示剪枝</label>
-              <button id="fit-tree" type="button" disabled>缩览树</button>
-              <button id="actual-tree" class="active" type="button" disabled>原始比例</button>
-            </div></div>
-            <div id="tree-viewport" class="tree-viewport">
-              <div id="tree-empty" class="tree-empty"><span class="empty-tree-mark" aria-hidden="true">┬</span><span>暂无搜索过程</span></div>
-              <svg id="search-tree" role="img" aria-label="逐步展开的 Java 搜索树" hidden></svg>
-            </div>
-          </section>
-          <div class="transport studio-transport">
-            <button id="previous" type="button" disabled>← 上一步</button>
-            <button id="play-studio" class="primary" type="button" disabled>▶ 播放算法</button>
-            <button id="next-studio" type="button" disabled>下一步 →</button>
-            <span id="position">— / —</span>
-            <input id="timeline" type="range" min="0" max="0" value="0" aria-label="动画进度" disabled />
-          </div>
-        </section>
-      </div>
-    </main>
-    <dialog id="library-dialog" aria-labelledby="library-title">
-      <div class="library-heading">
-        <div><span class="section-label">N-PUZZLE / LOCAL LIBRARY</span><h2 id="library-title">问题记录 <span id="library-record-count">0</span></h2></div>
-        <button id="library-close" class="icon-button" type="button" aria-label="关闭问题记录">×</button>
-      </div>
-      <div class="library-toolbar">
-        <button id="library-import" class="primary" type="button">＋ 导入记录</button>
-        <input id="library-files" type="file" accept="application/json,.json" multiple hidden />
-        <span id="library-selection-count" class="muted">未选择</span>
-        <button id="library-delete" class="delete-button" type="button" disabled>删除所选</button>
-      </div>
-      <div id="library-delete-confirm" class="delete-confirm" hidden>
-        <span id="library-delete-summary"></span><button id="library-delete-cancel" type="button">取消</button><button id="library-delete-apply" class="danger" type="button">确认删除</button>
-      </div>
-      <div class="library-table-viewport">
-        <table class="library-table">
-          <thead><tr>
-            <th class="check-cell"><input id="library-select-all" type="checkbox" aria-label="选择全部记录" disabled /></th>
-            <th scope="col">起点 / 问题名称</th><th scope="col">棋盘</th><th scope="col">算法 / 启发函数</th><th scope="col">路径</th><th scope="col">扩展 / 生成</th><th scope="col">耗时</th><th scope="col">导入时间</th><th scope="col">操作</th>
-          </tr></thead>
-          <tbody id="library-rows"></tbody>
-        </table>
-        <div id="library-empty" class="library-empty"><span class="empty-library-mark" aria-hidden="true">＋</span><h3>导入第一个问题</h3><p>选择 Java 导出的 JSON，路径与完整过程将一同保存。</p></div>
-      </div>
-      <div class="library-footer"><span>记录保存在此浏览器中</span><p id="library-status" role="status"></p></div>
-    </dialog>
-    <script src="library.js"></script>
-    <script src="app.js"></script>
-    <script src="search-studio.js"></script>
-    <script src="navigation.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
