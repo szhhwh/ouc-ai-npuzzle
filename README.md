@@ -93,7 +93,17 @@ bun run build      # 类型检查并输出单文件 dist/index.html
 ./scripts/run.sh problems-stage1.txt astar MISPLACED,MANHATTAN
 ```
 
-脚本会先编译，再调用 `core.runner.SearchTester`。问题文件可省略 `resources/` 前缀。课程实例存放在 `resources/problems-stage1.txt`、`problems-stage2.txt` 和 `problems-stage3.txt` 中。
+脚本会先编译，再调用 `core.runner.SearchTester`。问题文件可省略 `resources/` 前缀。
+
+| 文件 | 样例范围 |
+| --- | --- |
+| `problems-stage1.txt` | 要求文档中指定的 2 个三阶样例，均需在 1 秒内解决。 |
+| `problems-stage2.txt` | 老师 IDA* 测试文件中的全部 7 个四阶样例，按原顺序排列；其中第 1、2、5 个也在老师的 A* 测试文件中。 |
+| `problems-stage3.txt` | 要求文档中指定的 1 个四阶样例，需在 1 分钟内解决；它也是第二阶段文件的最后一个样例。 |
+| `problems-teacher-astar.txt` | 老师 A* 测试文件的全部 6 个样例，含 3 个三阶和 3 个四阶样例。 |
+| `problems-teacher-idastar.txt` | 老师 IDA* 测试文件的全部 10 个样例，含 3 个三阶和 7 个四阶样例。 |
+
+与老师的运行结果逐项对照时，可使用对应的 `problems-teacher-*` 文件。第二阶段文件包含极难样例，直接使用 A* 或曼哈顿距离运行全部样例可能耗时很长或耗尽内存；老师的 IDA* 结果中没有最后一个样例的完成耗时。
 
 使用 Maven 编译后，也可直接运行：
 

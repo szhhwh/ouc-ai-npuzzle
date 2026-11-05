@@ -15,7 +15,7 @@ usage() {
 
 示例：
   $(basename "$0") resources/problems-stage1.txt astar MISPLACED,MANHATTAN
-  $(basename "$0") resources/problems-stage2.txt astar MANHATTAN
+  $(basename "$0") resources/problems-teacher-astar.txt astar MANHATTAN
   $(basename "$0") resources/problems-stage3.txt nida DISJOINT_PATTERN
 EOF
 }
