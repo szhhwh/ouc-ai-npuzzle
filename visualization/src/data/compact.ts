@@ -78,6 +78,7 @@ export function compactRecord(record: RawRecord): RecordDetails {
     nodeCount,
     frameCount,
     depthFirst,
+    pathCostOnly: record.algorithm === "Dijkstra",
     boards,
     parent,
     g,

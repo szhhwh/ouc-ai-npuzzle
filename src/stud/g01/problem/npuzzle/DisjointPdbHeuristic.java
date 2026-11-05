@@ -1,5 +1,6 @@
 package stud.g01.problem.npuzzle;
 
+import core.problem.State;
 import core.solver.algorithm.heuristic.Predictor;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -43,11 +44,28 @@ public final class DisjointPdbHeuristic {
     /** 普通搜索逐次完整查表；仅 symmetry 选项影响启发值。 */
     public static Predictor predictor(PdbOptions options) {
         boolean symmetry = options.symmetry();
-        return (state, goal) -> {
-            PuzzleBoard target = (PuzzleBoard) goal;
-            return target.size() == 4
-                    ? RegularPdbHeuristic.tablesFor(target).hMax((PuzzleBoard) state, symmetry)
-                    : tablesFor(target).hMax((PuzzleBoard) state, symmetry);
+        return new PuzzleHeuristic() {
+            @Override
+            public int heuristics(State state, State goal) {
+                if (state.equals(goal)) return 0;
+                PuzzleBoard target = (PuzzleBoard) goal;
+                return target.size() == 4
+                        ? RegularPdbHeuristic.tablesFor(target).hMax((PuzzleBoard) state, symmetry)
+                        : tablesFor(target).hMax((PuzzleBoard) state, symmetry);
+            }
+
+            @Override
+            public PuzzleSearchContext newContext(PuzzleBoard initial, PuzzleBoard goal) {
+                return switch (initial.size()) {
+                    case 3 -> new ProductPdbContext(initial, tablesFor(goal), options);
+                    case 4 ->
+                            new ComponentPdbContext(
+                                    initial, ComponentPdbContext.tablesFor(goal), options);
+                    default ->
+                            throw new UnsupportedOperationException(
+                                    initial.size() + " 阶未定义 PDB（仅支持 3/4 阶）");
+                };
+            }
         };
     }
 

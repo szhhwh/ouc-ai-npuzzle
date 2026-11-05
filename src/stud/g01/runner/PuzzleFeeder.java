@@ -79,16 +79,13 @@ public class PuzzleFeeder extends EngineFeeder {
     }
 
     /**
-     * PDB 使用 N-Puzzle 专用 IDA*；基础启发函数使用通用 IDA*。
+     * 使用所选启发函数生成 N-Puzzle 专用 IDA*。
      *
-     * @param type 启发函数类型
-     * @return 对应的 IDA* 搜索器
+     * @param predictor 启发函数
+     * @return N-Puzzle 专用 IDA* 搜索器
      */
     @Override
-    public AbstractSearcher getNIdaStar(HeuristicType type) {
-        if (type == HeuristicType.DISJOINT_PATTERN) {
-            return new NPuzzleIdaStar();
-        }
-        return getIdaStar(type);
+    public AbstractSearcher getNIdaStar(Predictor predictor) {
+        return new NPuzzleIdaStar(predictor);
     }
 }

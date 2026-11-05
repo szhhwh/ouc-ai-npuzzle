@@ -115,15 +115,25 @@ java -cp target/classes core.runner.SearchTester \
 四个参数依次为：问题文件、`EngineFeeder` 实现类全限定名、搜索引擎、启发函数列表。
 
 - 搜索引擎：`astar`、`ida`、`nida`、`dijkstra`。
-- N-Puzzle 启发函数：`MISPLACED`（错位数）、`MANHATTAN`（曼哈顿距离）、`DISJOINT_PATTERN`（PDB），多个值用逗号分隔。
-- `nida` 配合 PDB 使用专用 IDA*；配合其他启发函数使用通用 IDA*。
+- N-Puzzle 启发函数：`ZERO`（零估计）、`MISPLACED`（错位数）、`MANHATTAN`（曼哈顿距离）、`DISJOINT_PATTERN`（PDB），多个值用逗号分隔。
+- 四种引擎均可搭配上述任一启发函数。`nida` 始终使用 N-Puzzle 专用 IDA*，由启发函数提供完整估值或增量状态。Dijkstra 计算并记录所选 `h`，候选队列只按 `g` 排序；选择 `ZERO` 时即为零估计。
+
+Java API 也可直接注入处理同类状态的 `Predictor`，不需要注册枚举：
+
+```java
+Predictor heuristic = (state, goal) ->
+        2 * PuzzleHeuristics.manhattan((PuzzleBoard) state, (PuzzleBoard) goal);
+AbstractSearcher searcher = new PuzzleFeeder().getSearcher("nida", heuristic);
+```
+
+`getSearcher(engine, predictor)` 只按引擎选择算法，启发函数独立传入。专用搜索通过盘面比较判定目标，返回路径保留实际启发值，路径存储随深度增长。运行入口不检查启发函数的可采纳性或一致性。
 
 PDB 支持三阶和四阶棋盘，首次使用时建表，缓存存放在 `resources/pdb-cache/`。
 
 | 棋盘与引擎 | 分组与存储 | 距离表净大小 |
 | --- | --- | --- |
 | 三阶 | 3-3-2，乘积编码 | 13,851 字节 |
-| 四阶 `astar/ida` | 6-6-3，排名编码，保留空格位置 | 110.01 MiB |
+| 四阶 `astar/ida/dijkstra` | 6-6-3，排名编码，保留空格位置 | 110.01 MiB |
 | 四阶 `nida` | 7-8，连通分量编码 | 约 482 MiB |
 
 四阶普通 PDB 去除了棋子位置重叠的无效索引，启发值与原乘积表一致。专用 PDB 把空格可零代价互达的位置合并为同一个自由连通分量，同时保留不同分量的距离。该压缩是无损的，IDA* 仍返回最短解。
@@ -132,13 +142,13 @@ PDB 支持三阶和四阶棋盘，首次使用时建表，缓存存放在 `resou
 
 四阶专用表只读取当前的 `component-le-*.bin`。缓存缺失或校验失败时直接运行 BFS 建表并写入新缓存，不再读取旧版 `component-*.bin` 或 `ranked-*.bin`。
 
-专用 IDA* 在查表前排除立即反向移动和路径环，超界候选只更新下一轮阈值。候选移动缓存新索引、距离和父状态，执行与撤销不再重复计算排名或查询 PDB。生成节点数仍按所有合法移动计数，便于与原实现对照。
+专用 IDA* 搭配 PDB 时，在查表前排除立即反向移动和路径环，超界候选只更新下一轮阈值。候选移动缓存新索引、距离和父状态，执行与撤销不再重复计算排名或查询 PDB。生成节点数仍按所有合法移动计数，便于与原实现对照。
 
-PDB 提供两个独立的 JVM 开关，默认均为 `true`，在创建搜索器或启发函数时读取：
+PDB 提供两个独立的 JVM 开关，默认均为 `true`，在创建启发函数时读取：
 
 | JVM 参数 | 作用 |
 | --- | --- |
-| `-Dnpuzzle.pdb.incremental=false` | 关闭专用 `nida` 的增量查表，每个候选状态重新计算全部分组的索引和距离；仍使用相同的 PDB、搜索顺序和剪枝规则。普通 `astar/ida` 原本就完整查表。 |
+| `-Dnpuzzle.pdb.incremental=false` | 关闭 PDB 搜索上下文的增量查表，每个候选状态重新计算全部分组的索引和距离；仍使用相同的 PDB、搜索顺序和剪枝规则。普通 `astar/ida/dijkstra` 原本就完整查表。 |
 | `-Dnpuzzle.pdb.symmetry=false` | 关闭普通 PDB 与专用 `nida` 的主对角线对称增强，仅使用直接查表值。设为 `true` 时仍要求目标空格在主对角线上。 |
 
 例如，同时关闭两个功能：
@@ -149,13 +159,17 @@ java -Dnpuzzle.pdb.incremental=false -Dnpuzzle.pdb.symmetry=false \
   resources/problems-stage3.txt stud.g01.runner.PuzzleFeeder nida DISJOINT_PATTERN
 ```
 
-使用 `scripts/run.sh` 时，可通过 `JAVA_OPTS` 传入上述 `-D` 参数。代码中可用
-`new NPuzzleIdaStar(false, false)` 显式设置，或通过
-`new NPuzzleIdaStar(new PdbOptions(false, false), observer)` 同时指定观察器；
-普通启发函数可用 `DisjointPdbHeuristic.predictor(new PdbOptions(true, false))`。
+使用 `scripts/run.sh` 时，可通过 `JAVA_OPTS` 传入上述 `-D` 参数。代码中先配置启发函数，再传给搜索器：
+
+```java
+Predictor pdb = DisjointPdbHeuristic.predictor(new PdbOptions(false, false));
+AbstractSearcher searcher = new NPuzzleIdaStar(pdb, observer);
+```
+
+PDB 的分组、增量和对称实现由启发函数提供；专用搜索器接收 `Predictor`，普通搜索器使用同一对象的完整估值接口。
 这些配置不改变距离表缓存格式，同一进程中可复用相同距离表运行不同组合。
 
-开关回归检查：`bash scripts/test-pdb-options.sh`；追加 `--component` 可检查四阶 7-8 PDB，
+组合与开关回归检查：`bash scripts/test-pdb-options.sh`；追加 `--component` 可检查四阶 7-8 PDB，
 四阶检查需要现有缓存或首次建表。测试在 `target/pdb-tests/` 下使用独立缓存副本；
 默认堆上限为 2 GiB，四阶检查为 12 GiB，可通过 `PDB_TEST_HEAP` 覆盖。
 
@@ -181,7 +195,7 @@ n  <n*n 个初始状态数字>  <n*n 个目标状态数字>
 ./scripts/export-visualization.sh resources/problems-stage1.txt results.json astar MANHATTAN
 ```
 
-参数依次为输入文件、输出 `.json`、引擎、启发函数列表；全部省略时使用上述默认值。引擎支持 `astar`、`ida`、`nida`、`dijkstra`。可用逗号指定多个启发函数，每个实例与启发函数组合生成一条独立记录，每条记录只执行一次实际搜索。Dijkstra 使用 `ZERO`。使用 `DISJOINT_PATTERN` 时在末尾传入 `--allow-pdb`；PDB 的首次建表成本与普通命令相同。
+参数依次为输入文件、输出 `.json`、引擎、启发函数列表；全部省略时使用上述默认值。引擎支持 `astar`、`ida`、`nida`、`dijkstra`，启发函数支持 `ZERO`、`MISPLACED`、`MANHATTAN`、`DISJOINT_PATTERN`，可独立组合。可用逗号指定多个启发函数，每个实例与启发函数组合生成一条独立记录，每条记录只执行一次实际搜索。Dijkstra 记录所选启发函数及其真实值，网页队列按 `g` 展示排序。使用 `DISJOINT_PATTERN` 时在末尾传入 `--allow-pdb`；PDB 的首次建表成本与普通命令相同。
 
 在网页「问题记录」中直接导入整个输出文件，无需拆分批量结果。格式为 `{"schemaVersion":2,"results":[...]}`：每条结果包含 `states`（包括起点和终点）、`goal`、算法与启发函数、`timeMs`、`generated`、`expanded`，以及 `trace` 的完整节点、扩展帧与解节点编号。每次 IDA* 迭代均保留一个根节点，生成计数不包含这些根节点。导入时检查棋盘、合法移动、节点父子关系、帧计数和解路径一致性；缺少完整过程的文件无法导入，需要重新导出。
 

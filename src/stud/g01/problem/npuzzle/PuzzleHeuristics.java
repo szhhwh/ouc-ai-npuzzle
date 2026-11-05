@@ -3,6 +3,7 @@ package stud.g01.problem.npuzzle;
 import static core.solver.algorithm.heuristic.HeuristicType.DISJOINT_PATTERN;
 import static core.solver.algorithm.heuristic.HeuristicType.MANHATTAN;
 import static core.solver.algorithm.heuristic.HeuristicType.MISPLACED;
+import static core.solver.algorithm.heuristic.HeuristicType.ZERO;
 
 import core.solver.algorithm.heuristic.HeuristicType;
 import core.solver.algorithm.heuristic.Predictor;
@@ -15,6 +16,7 @@ public final class PuzzleHeuristics {
             new EnumMap<>(HeuristicType.class);
 
     static {
+        predictors.put(ZERO, (state, goal) -> 0);
         predictors.put(
                 MISPLACED, (state, goal) -> misplaced((PuzzleBoard) state, (PuzzleBoard) goal));
         predictors.put(

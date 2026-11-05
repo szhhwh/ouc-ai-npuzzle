@@ -57,6 +57,7 @@ public class Position extends State {
             new EnumMap<>(HeuristicType.class);
 
     static {
+        predictors.put(ZERO, (state, goal) -> 0);
         predictors.put(PF_EUCLID, (state, goal) -> ((Position) state).euclid((Position) goal));
         predictors.put(
                 PF_MANHATTAN, (state, goal) -> ((Position) state).manhattan((Position) goal));

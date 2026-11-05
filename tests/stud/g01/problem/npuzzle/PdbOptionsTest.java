@@ -58,8 +58,13 @@ public final class PdbOptionsTest {
                     12,
                     PuzzleHeuristics.predictor(HeuristicType.MANHATTAN).heuristics(FIXTURE, GOAL),
                     "PDB switches do not configure Manhattan");
+            NPuzzleIdaStar ordinary =
+                    new NPuzzleIdaStar(PuzzleHeuristics.predictor(HeuristicType.MANHATTAN));
+            Deque<Node> path = ordinary.search(new NPuzzleProblem(FIXTURE, GOAL));
+            check(path != null && path.getLast().getState().equals(GOAL),
+                    "ordinary search does not read PDB switches");
             try {
-                new NPuzzleIdaStar();
+                DisjointPdbHeuristic.predictor();
                 throw new AssertionError("invalid switch must be rejected: " + key);
             } catch (IllegalArgumentException expected) {
                 check(expected.getMessage().contains(key), "error identifies invalid property");
@@ -70,9 +75,10 @@ public final class PdbOptionsTest {
 
     private static void searcherCapturesConfiguration() {
         configure(false, false);
-        NPuzzleIdaStar captured = new NPuzzleIdaStar();
+        NPuzzleIdaStar captured = new NPuzzleIdaStar(DisjointPdbHeuristic.predictor());
         configure(true, true);
-        NPuzzleIdaStar explicit = new NPuzzleIdaStar(false, false);
+        NPuzzleIdaStar explicit =
+                new NPuzzleIdaStar(DisjointPdbHeuristic.predictor(new PdbOptions(false, false)));
         NPuzzleProblem problem = new NPuzzleProblem(FIXTURE, GOAL);
         equal(18, captured.search(problem).size(), "captured search configuration");
         equal(18, explicit.search(problem).size(), "explicit search configuration");
@@ -109,7 +115,7 @@ public final class PdbOptionsTest {
             for (int s = 0; s < settings.length; s++) {
                 boolean symmetry = settings[s];
                 configure(incremental, symmetry);
-                NPuzzleIdaStar searcher = new NPuzzleIdaStar();
+                NPuzzleIdaStar searcher = new NPuzzleIdaStar(DisjointPdbHeuristic.predictor());
                 // A separate breadth-first search gives optimal distance 18.
                 Deque<Node> path = searcher.search(new NPuzzleProblem(FIXTURE, GOAL));
                 check(path != null, "fixture must be solvable");
@@ -153,7 +159,9 @@ public final class PdbOptionsTest {
                         new PuzzleBoard(
                                 new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 12, 13, 14, 11, 15},
                                 4);
-                Deque<Node> path = new NPuzzleIdaStar().search(new NPuzzleProblem(initial, goal));
+                Deque<Node> path =
+                        new NPuzzleIdaStar(DisjointPdbHeuristic.predictor())
+                                .search(new NPuzzleProblem(initial, goal));
                 check(path != null, "four-by-four fixture must be solvable");
                 equal(2, path.size(), "four-by-four shortest path");
             }

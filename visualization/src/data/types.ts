@@ -79,6 +79,7 @@ export interface CompactTrace {
   nodeCount: number;
   frameCount: number;
   depthFirst: boolean;
+  pathCostOnly: boolean;
   boards: Uint8Array;
   parent: Int32Array;
   g: Int32Array;

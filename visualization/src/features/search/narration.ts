@@ -26,7 +26,7 @@ export function narrate(record: LoadedRecord, scene: Scene, frontier: Frontier |
         tag: "准备",
         title: depthFirst ? `从起点开始，界限 = h(起点) = ${trace.h[0]}` : "起点加入候选队列",
         body: dijkstra
-          ? "Dijkstra 只看已走步数 g：起点 g = 0。每轮取出 g 最小的候选节点展开。"
+          ? `Dijkstra 按已走步数 g 排序：起点 g = 0，h = ${trace.h[0]}。h 仍按所选启发函数记录，不参与候选队列排序。`
           : `f = g + h：g 是已走步数，h 是到目标的估计。起点 g = 0，h = ${trace.h[0]}，所以 f = ${trace.h[0]}。`,
       };
     case "pick": {
@@ -45,7 +45,7 @@ export function narrate(record: LoadedRecord, scene: Scene, frontier: Frontier |
           body: `#${id} 的 f = ${f(record, id)}，不超过本轮界限 ${scene.bound}，继续向下生成它的后继。`,
         };
       }
-      const ties = frontier && frontier.ties > 1 ? `有 ${frontier.ties} 个候选的 f 和 g 都相同，由 Java 优先队列决定先取哪一个。` : "";
+      const ties = frontier && frontier.ties > 1 ? `有 ${frontier.ties} 个候选的 ${dijkstra ? "g 相同" : "f 和 g 都相同"}，由 Java 优先队列决定先取哪一个。` : "";
       return {
         tag: roundTag,
         title: `取出${dijkstra ? " g" : " f"} 最小的节点 #${id}`,
@@ -59,7 +59,9 @@ export function narrate(record: LoadedRecord, scene: Scene, frontier: Frontier |
       const move = moveBetween(boardOf(trace, id), boardOf(trace, child), trace.size);
       const status = STATUSES[trace.status[child]];
       const ref = trace.reference[child];
-      const sum = `f = ${trace.g[child]} + ${trace.h[child]} = ${f(record, child)}`;
+      const sum = dijkstra
+        ? `g = ${trace.g[child]}，h = ${trace.h[child]}（估值 f = ${f(record, child)}，按 g 排序）`
+        : `f = ${trace.g[child]} + ${trace.h[child]} = ${f(record, child)}`;
       const verdicts: Record<typeof status, string> = {
         frontier: depthFirst ? `${sum}，不超过界限 ${scene.bound}，稍后深入访问。` : `${sum}，加入候选队列。`,
         replaced: `${sum}；候选中的同一状态 #${ref} 代价更高（g = ${trace.g[ref]}），用新节点替换它。`,
@@ -80,7 +82,7 @@ export function narrate(record: LoadedRecord, scene: Scene, frontier: Frontier |
       for (let child = scene.childStart; child < scene.childEnd; child++) if (trace.status[child] >= 2) pruned++;
       const kept = scene.childEnd - scene.childStart - pruned;
       const nextIsRoot = scene.next >= 0 && trace.parent[scene.next] < 0;
-      const next = scene.next < 0 ? "" : nextIsRoot ? "本次迭代没有找到目标，下一轮将提高界限。" : `下一个${depthFirst ? "访问" : "取出"} #${scene.next}（f = ${f(record, scene.next)}）。`;
+      const next = scene.next < 0 ? "" : nextIsRoot ? "本次迭代没有找到目标，下一轮将提高界限。" : `下一个${depthFirst ? "访问" : "取出"} #${scene.next}（${dijkstra ? `g = ${trace.g[scene.next]}` : `f = ${f(record, scene.next)}`}）。`;
       return {
         tag: roundTag,
         title: `本轮保留 ${kept} 个，剪枝 ${pruned} 个`,

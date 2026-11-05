@@ -138,30 +138,32 @@ export interface FrontierEntry {
   id: number;
   f: number;
   g: number;
+  priority: number;
 }
 
 export interface Frontier {
   size: number;
-  /** Open nodes in priority order (f, then g; remaining ties by id). */
+  /** Open nodes in algorithm priority order; remaining ties follow the Java pick, then id. */
   top: FrontierEntry[];
-  /** Open node count per f value, ascending. */
-  histogram: Array<{ f: number; count: number }>;
-  /** Open nodes sharing the head's f and g, i.e. the tie the Java queue resolves. */
+  /** Open node count per sorting value (g for Dijkstra, otherwise f), ascending. */
+  histogram: Array<{ value: number; count: number }>;
+  /** Open nodes tied for the head's sorting priority. */
   ties: number;
 }
 
 export function frontierAt(trace: CompactTrace, scene: Scene, limit: number): Frontier {
-  // Among equal (f, g) the Java queue's actual choice goes first, so the list's head is the node really taken.
+  // The Java queue's actual choice goes first among equal sorting priorities.
   const chosen = scene.phase === "pick" ? scene.current : scene.next;
-  const before = (a: FrontierEntry, b: FrontierEntry) => a.f - b.f || a.g - b.g || Number(b.id === chosen) - Number(a.id === chosen) || a.id - b.id;
+  const priority = (id: number) => trace.g[id] + (trace.pathCostOnly ? 0 : trace.h[id]);
+  const before = (a: FrontierEntry, b: FrontierEntry) => a.priority - b.priority || a.g - b.g || Number(b.id === chosen) - Number(a.id === chosen) || a.id - b.id;
   const top: FrontierEntry[] = [];
   const counts = new Map<number, number>();
   let size = 0;
   for (let id = scene.rangeStart; id < scene.revealedEnd; id++) {
     if (!isOpen(trace, scene, id)) continue;
     size++;
-    const entry = { id, g: trace.g[id], f: trace.g[id] + trace.h[id] };
-    counts.set(entry.f, (counts.get(entry.f) ?? 0) + 1);
+    const entry = { id, g: trace.g[id], f: trace.g[id] + trace.h[id], priority: priority(id) };
+    counts.set(entry.priority, (counts.get(entry.priority) ?? 0) + 1);
     if (top.length === limit && before(entry, top[limit - 1]) >= 0) continue;
     let at = top.length;
     while (at > 0 && before(entry, top[at - 1]) < 0) at--;
@@ -172,10 +174,10 @@ export function frontierAt(trace: CompactTrace, scene: Scene, limit: number): Fr
   if (top.length) {
     const head = top[0];
     for (let id = scene.rangeStart; id < scene.revealedEnd; id++) {
-      if (trace.g[id] === head.g && trace.g[id] + trace.h[id] === head.f && isOpen(trace, scene, id)) ties++;
+      if (trace.g[id] === head.g && priority(id) === head.priority && isOpen(trace, scene, id)) ties++;
     }
   }
-  const histogram = [...counts].map(([f, count]) => ({ f, count })).sort((a, b) => a.f - b.f);
+  const histogram = [...counts].map(([value, count]) => ({ value, count })).sort((a, b) => a.value - b.value);
   return { size, top, histogram, ties };
 }
 

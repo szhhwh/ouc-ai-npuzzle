@@ -890,7 +890,7 @@ export class TreeRenderer {
         ctx.fillText(tag, HALF_W - 8, -HALF_H + 14);
         ctx.globalAlpha /= pruned ? Math.max(markP, 0.001) : 1;
       }
-      // Footer: g + h = f, with h in chart magenta.
+      // Display g, h and the estimate f = g + h; Dijkstra orders by g alone.
       const g = trace.g[id];
       const h = trace.h[id];
       const fy = HALF_H - 9;
@@ -951,7 +951,7 @@ export class TreeRenderer {
     const index = this.hovered - this.layout.start;
     const sx = this.dispX[index] * this.transform.k + this.transform.x;
     const sy = (this.dispY[index] - HALF_H) * this.transform.k + this.transform.y - 10;
-    const label = `#${this.hovered}  g ${trace.g[this.hovered]} + h ${trace.h[this.hovered]} = f ${trace.g[this.hovered] + trace.h[this.hovered]}`;
+    const label = `#${this.hovered}  g ${trace.g[this.hovered]} + h ${trace.h[this.hovered]} = f ${trace.g[this.hovered] + trace.h[this.hovered]}${trace.pathCostOnly ? "（按 g 排序）" : ""}`;
     ctx.save();
     ctx.font = `500 11px ${MONO}`;
     const width = ctx.measureText(label).width + 18;

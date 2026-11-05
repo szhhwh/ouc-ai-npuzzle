@@ -7,7 +7,8 @@ TEST_HEAP="${PDB_TEST_HEAP:-2g}"
 mvn -q test
 mkdir -p target/pdb-tests
 javac -encoding UTF-8 -cp target/classes -d target/pdb-tests \
-  tests/stud/g01/problem/npuzzle/PdbOptionsTest.java
+  tests/stud/g01/problem/npuzzle/PdbOptionsTest.java \
+  tests/stud/g01/problem/npuzzle/HeuristicCompositionTest.java
 
 # Alternate-goal tests must not replace the user's standard-goal caches.
 RUN_DIR="$(mktemp -d "$PROJECT_ROOT/target/pdb-tests/run-XXXXXX")"
@@ -29,5 +30,7 @@ if [[ "${1:-}" == "--component" ]]; then
   done
 fi
 cd "$RUN_DIR"
+java "-Xmx$TEST_HEAP" -cp "$PROJECT_ROOT/target/classes:$PROJECT_ROOT/target/pdb-tests" \
+  stud.g01.problem.npuzzle.HeuristicCompositionTest
 java "-Xmx$TEST_HEAP" -cp "$PROJECT_ROOT/target/classes:$PROJECT_ROOT/target/pdb-tests" \
   stud.g01.problem.npuzzle.PdbOptionsTest "$@"

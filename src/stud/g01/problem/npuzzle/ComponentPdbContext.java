@@ -67,7 +67,7 @@ final class ComponentPdbContext extends PdbContext {
     }
 
     ComponentPdbContext(PuzzleBoard initial, Tables tables, PdbOptions options) {
-        super(initial);
+        super(initial, tables.goal.cells());
         this.tables = tables;
         incremental = options.incremental();
         symmetric = options.symmetry() && tables.symmetric;

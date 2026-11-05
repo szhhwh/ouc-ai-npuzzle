@@ -1,13 +1,13 @@
 package stud.g01.problem.npuzzle;
 
 import core.problem.Problem;
+import core.solver.algorithm.heuristic.Predictor;
 import core.solver.algorithm.searcher.AbstractSearcher;
 import core.solver.queue.Node;
 import java.util.Arrays;
 import java.util.Deque;
-import java.util.Objects;
 
-/** N-Puzzle 的 PDB IDA*。3 阶使用乘积编码 3-3-2，4 阶使用无损连通分量编码 7-8。 */
+/** 使用可回退盘面和状态去重的 N-Puzzle IDA*。 */
 public final class NPuzzleIdaStar extends AbstractSearcher {
 
     /** Export observations copy boards only when explicitly enabled. */
@@ -22,38 +22,27 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     }
 
     private final Observer observer;
-    private final PdbOptions options;
+    private final Predictor predictor;
 
     /** f 值的正无穷哨兵，dfs 返回它表示本子树没有因 f 超过界限而被剪枝的结点 */
     private static final int INFINITY = Integer.MAX_VALUE;
 
-    /** dfs 深度上限，取值比 4 阶 15-Puzzle 的状态空间直径 80 略大 */
-    private static final int MAX_DEPTH = 88;
-
     private final Transpositions transpositions = new Transpositions();
     private Workspace workspace;
 
-    /** 增量搜索自行维护当前路径，不使用框架的 Frontier。 */
-    public NPuzzleIdaStar() {
-        this(null);
+    /** 搜索自行维护当前路径，不使用框架的 Frontier。 */
+    public NPuzzleIdaStar(Predictor predictor) {
+        this(predictor, null);
     }
 
-    public NPuzzleIdaStar(Observer observer) {
-        this(PdbOptions.fromSystemProperties(), observer);
-    }
-
-    public NPuzzleIdaStar(boolean incremental, boolean symmetry) {
-        this(new PdbOptions(incremental, symmetry), null);
-    }
-
-    public NPuzzleIdaStar(PdbOptions options, Observer observer) {
+    public NPuzzleIdaStar(Predictor predictor, Observer observer) {
         super(null);
-        this.options = Objects.requireNonNull(options);
+        this.predictor = predictor;
         this.observer = observer;
     }
 
     /**
-     * 求解入口：先判断可解性和目标，再按盘面规模创建增量 PDB 上下文。
+     * 求解入口：先判断可解性和目标，再创建所选启发函数的搜索上下文。
      *
      * @param problem 3 阶或 4 阶 N-Puzzle 问题
      * @return 解路径（不含根结点）；无解返回 null；初始即目标返回空路径
@@ -67,28 +56,19 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         }
 
         Node root = problem.root();
+        PuzzleBoard initial = (PuzzleBoard) root.getState();
+        PuzzleBoard goal = ((NPuzzleProblem) problem).goalBoard();
         if (problem.goal(root.getState())) {
+            int h = predictor.heuristics(initial, goal);
+            root.setHeuristic(h);
             if (observer != null) {
-                int id = observer.root(((PuzzleBoard) root.getState()).cells(), 0, 0, 0);
-                observer.visit(id, true, 0, 0);
+                int id = observer.root(initial.cells(), h, h, 0);
+                observer.visit(id, true, h, 0);
             }
             return generatePath(root);
         }
 
-        PuzzleBoard initial = (PuzzleBoard) root.getState();
-        PuzzleBoard goal = ((NPuzzleProblem) problem).goalBoard();
-        PdbContext context =
-                switch (initial.size()) {
-                    case 3 ->
-                            new ProductPdbContext(
-                                    initial, DisjointPdbHeuristic.tablesFor(goal), options);
-                    case 4 ->
-                            new ComponentPdbContext(
-                                    initial, ComponentPdbContext.tablesFor(goal), options);
-                    default ->
-                            throw new UnsupportedOperationException(
-                                    initial.size() + " 阶未定义增量 PDB（仅支持 3/4 阶）");
-                };
+        PuzzleSearchContext context = PuzzleSearchContext.create(initial, goal, predictor);
         if (workspace == null) workspace = new Workspace();
         Search search = new Search(context, transpositions, workspace, observer);
         search.run(initial.permutationParity() ^ goal.permutationParity());
@@ -98,7 +78,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         if (search.foundMoves == null) {
             return null;
         }
-        return buildPath(problem, initial, search.foundMoves);
+        return buildPath(problem, initial, search);
     }
 
     /**
@@ -107,18 +87,25 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
      *
      * @param problem 待求解的问题
      * @param initial 初始盘面
-     * @param foundMoves 每步空格移动后的目标格下标
+     * @param search 已命中解的搜索状态，含移动序列及沿途启发值
      * @return 解路径
      */
-    private Deque<Node> buildPath(Problem problem, PuzzleBoard initial, int[] foundMoves) {
+    private Deque<Node> buildPath(Problem problem, PuzzleBoard initial, Search search) {
         int size = initial.size();
-        Node root = problem.root();
+        Node root = problem.root().setHeuristic(search.context.heuristic());
         Node cur = root;
         PuzzleBoard prev = initial;
-        for (int t : foundMoves) {
+        for (int step = 0; step < search.foundMoves.length; step++) {
+            int t = search.foundMoves[step];
             PuzzleMove move = moveOf(prev.blank(), t, size);
             PuzzleBoard next = (PuzzleBoard) prev.next(move);
-            cur = new Node(next, cur, move, cur.getPathCost() + 1);
+            cur =
+                    new Node(
+                            next,
+                            cur,
+                            move,
+                            cur.getPathCost() + 1,
+                            search.workspace.heuristics[step]);
             prev = next;
         }
         return generatePath(cur);
@@ -133,57 +120,52 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     }
 
     private static final class Workspace {
-        final int[] moves = new int[MAX_DEPTH];
-        final PdbContext.Move[][] candidates = new PdbContext.Move[MAX_DEPTH][];
+        int[] moves = new int[88];
+        int[] heuristics = new int[88];
+        PuzzleSearchContext.Move[][] candidates = new PuzzleSearchContext.Move[88][];
         final LongHashSet pathSet = new LongHashSet(512);
+
+        void ensureDepth(int depth) {
+            if (depth < moves.length) return;
+            int capacity = moves.length * 2;
+            moves = Arrays.copyOf(moves, capacity);
+            heuristics = Arrays.copyOf(heuristics, capacity);
+            candidates = Arrays.copyOf(candidates, capacity);
+        }
     }
 
     /** 一次搜索的遍历状态；盘面和启发值由 context 管理。 */
-    static final class Search {
-        private final PdbContext context;
-        private final int[] moves;
-        private final PdbContext.Move[][] candidates;
+    private static final class Search {
+        private final PuzzleSearchContext context;
+        private final Workspace workspace;
         private final LongHashSet pathSet;
         private final Transpositions transpositions;
         private boolean cacheActive;
         int[] foundMoves;
         private int generated, expanded;
         private final Observer observer;
-        private final int[] tracePath;
-        private final PdbContext.Move traceMove;
+        private int[] tracePath;
+        private final PuzzleSearchContext.Move traceMove;
         private int iteration;
 
-        Search(PdbContext context) {
-            this(context, new Transpositions());
-        }
-
-        Search(PdbContext context, Transpositions transpositions) {
-            this(context, transpositions, new Workspace());
-        }
-
-        Search(PdbContext context, Transpositions transpositions, Workspace workspace) {
-            this(context, transpositions, workspace, null);
-        }
-
         Search(
-                PdbContext context,
+                PuzzleSearchContext context,
                 Transpositions transpositions,
                 Workspace workspace,
                 Observer observer) {
             this.context = context;
+            this.workspace = workspace;
             this.transpositions = transpositions;
             this.observer = observer;
-            tracePath = observer == null ? null : new int[MAX_DEPTH + 1];
-            traceMove = observer == null ? null : new PdbContext.Move();
-            moves = workspace.moves;
-            candidates = workspace.candidates;
+            tracePath = observer == null ? null : new int[workspace.moves.length + 1];
+            traceMove = observer == null ? null : context.newMove();
             pathSet = workspace.pathSet;
         }
 
-        /** 奇偶对齐的迭代加深主体。返回时 foundMoves 非 null 表示找到最优解，空数组表示初始即目标 */
+        /** 奇偶对齐的迭代加深主体，foundMoves 保存命中的移动序列。 */
         void run(int parity) {
             int h0 = context.heuristic();
-            // 初始界限取 h(root)。若与解长奇偶不符，则 h(root) 必然小于最优解长，加一仍不超过最优解长
+            // N-Puzzle 的所有解长具有相同奇偶性，界限向上对齐。
             int bound = ((h0 ^ parity) & 1) != 0 ? h0 + 1 : h0;
 
             while (foundMoves == null) {
@@ -194,7 +176,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 if (nextBound == INFINITY) {
                     return; // 搜遍全树仍未找到目标，可解性已经检查过，实际不会走到这里
                 }
-                // 界限与解长奇偶不符时这一层必然无解，直接抬到下一个同奇偶的界限
+                // 下一轮界限继续向上对齐解长奇偶性。
                 bound = ((nextBound ^ parity) & 1) != 0 ? nextBound + 1 : nextBound;
                 iteration++;
             }
@@ -217,19 +199,14 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             if (cacheActive) return dfsGraph(depth, bound, previousBlank);
             // The root bound covers h(root); every child was already checked before apply.
             if (context.isGoal()) {
-                foundMoves = Arrays.copyOf(moves, depth);
+                foundMoves = Arrays.copyOf(workspace.moves, depth);
                 if (observer != null) observer.visit(tracePath[depth], true, bound, iteration);
                 return INFINITY;
             }
             expanded++;
             if (observer != null) observer.visit(tracePath[depth], false, bound, iteration);
             pathSet.add(context.code);
-            PdbContext.Move[] level = candidates[depth];
-            if (level == null) {
-                level = new PdbContext.Move[4];
-                for (int i = 0; i < level.length; i++) level[i] = new PdbContext.Move();
-                candidates[depth] = level;
-            }
+            PuzzleSearchContext.Move[] level = level(depth);
             int n = 0, min = INFINITY;
             for (int t : context.neighbors[context.blank]) {
                 generated++;
@@ -260,7 +237,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 n++;
             }
             for (int i = 1; i < n; i++) {
-                PdbContext.Move candidate = level[i];
+                PuzzleSearchContext.Move candidate = level[i];
                 int j = i - 1;
                 while (j >= 0 && level[j].heuristic > candidate.heuristic) {
                     level[j + 1] = level[j];
@@ -269,9 +246,10 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 level[j + 1] = candidate;
             }
             for (int i = 0; i < n; i++) {
-                PdbContext.Move move = level[i];
+                PuzzleSearchContext.Move move = level[i];
                 context.apply(move);
-                moves[depth] = move.to;
+                workspace.moves[depth] = move.to;
+                workspace.heuristics[depth] = move.heuristic;
                 if (observer != null) tracePath[depth + 1] = move.traceId;
                 int result = dfsTree(depth + 1, bound, move.from);
                 context.undo(move);
@@ -288,7 +266,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         /** Once activated, best-g pruning replaces the second path hash entirely. */
         private int dfsGraph(int depth, int bound, int previousBlank) {
             if (context.isGoal()) {
-                foundMoves = Arrays.copyOf(moves, depth);
+                foundMoves = Arrays.copyOf(workspace.moves, depth);
                 if (observer != null) observer.visit(tracePath[depth], true, bound, iteration);
                 return INFINITY;
             }
@@ -300,12 +278,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             if (observer != null) observer.visit(tracePath[depth], false, bound, iteration);
 
             // Count all legal moves as before, but only estimate acyclic candidates.
-            PdbContext.Move[] level = candidates[depth];
-            if (level == null) {
-                level = new PdbContext.Move[4];
-                for (int i = 0; i < level.length; i++) level[i] = new PdbContext.Move();
-                candidates[depth] = level;
-            }
+            PuzzleSearchContext.Move[] level = level(depth);
             int n = 0;
             int min = INFINITY;
             for (int t : context.neighbors[context.blank]) {
@@ -337,7 +310,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 n++;
             }
             for (int i = 1; i < n; i++) {
-                PdbContext.Move candidate = level[i];
+                PuzzleSearchContext.Move candidate = level[i];
                 int j = i - 1;
                 while (j >= 0 && level[j].heuristic > candidate.heuristic) {
                     level[j + 1] = level[j];
@@ -347,9 +320,10 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             }
 
             for (int i = 0; i < n; i++) {
-                PdbContext.Move move = level[i];
+                PuzzleSearchContext.Move move = level[i];
                 context.apply(move);
-                moves[depth] = move.to;
+                workspace.moves[depth] = move.to;
+                workspace.heuristics[depth] = move.heuristic;
                 if (observer != null) tracePath[depth + 1] = move.traceId;
                 int r = dfsGraph(depth + 1, bound, move.from);
                 context.undo(move);
@@ -364,6 +338,20 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             return min;
         }
 
+        private PuzzleSearchContext.Move[] level(int depth) {
+            workspace.ensureDepth(depth);
+            if (observer != null && tracePath.length <= depth + 1) {
+                tracePath = Arrays.copyOf(tracePath, workspace.moves.length + 1);
+            }
+            PuzzleSearchContext.Move[] level = workspace.candidates[depth];
+            if (level == null) {
+                level = new PuzzleSearchContext.Move[4];
+                for (int i = 0; i < level.length; i++) level[i] = context.newMove();
+                workspace.candidates[depth] = level;
+            }
+            return level;
+        }
+
         private void observeSkipped(int depth, int target, String status) {
             if (observer == null) return;
             int h = context.prepare(target, context.codeAfterMove(target), traceMove);
@@ -376,12 +364,12 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     private static final class Transpositions {
         private static final int CAPACITY = 1 << 18;
         private long[] keys;
-        private byte[] depths;
+        private int[] depths;
 
         void allocate() {
             if (keys != null) return;
             keys = new long[CAPACITY];
-            depths = new byte[CAPACITY];
+            depths = new int[CAPACITY];
         }
 
         void clear() {
@@ -408,21 +396,25 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             }
             if (keys[slot] == code && depths[slot] <= depth) return true;
             keys[slot] = code;
-            depths[slot] = (byte) depth;
+            depths[slot] = depth;
             return false;
         }
     }
 
-    /** 固定容量的链地址哈希集合，存放当前路径上状态的 64 位编码 */
+    /** 链地址哈希集合，随当前路径长度增长，存放状态的 64 位编码。 */
     private static final class LongHashSet {
-        private final long[] keys;
-        private final int[] next;
-        private final int[] heads;
-        private final int[] free;
+        private long[] keys;
+        private int[] next;
+        private int[] heads;
+        private int[] free;
         private int freeTop;
-        private final int shift;
+        private int shift;
 
         LongHashSet(int capacity) { // capacity 须为 2 的幂
+            allocate(capacity);
+        }
+
+        private void allocate(int capacity) {
             int bits = Integer.numberOfTrailingZeros(capacity);
             shift = 64 - bits;
             keys = new long[capacity];
@@ -450,6 +442,11 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         }
 
         void add(long key) {
+            if (freeTop == 0) {
+                long[] previous = keys;
+                allocate(keys.length * 2);
+                for (long existing : previous) add(existing);
+            }
             int s = free[--freeTop];
             keys[s] = key;
             int h = hash(key);

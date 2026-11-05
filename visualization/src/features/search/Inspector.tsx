@@ -36,7 +36,7 @@ interface InspectorProps {
   fast: boolean;
 }
 
-/** The calculation behind one node: its board, g + h = f, where h comes from, and why it was kept or cut. */
+/** One node's board, costs and heuristic estimate, plus why it was kept or cut. */
 export const Inspector = memo(function Inspector({ record, scene, inspected, onInspect, onLocate, fast }: InspectorProps) {
   const { trace } = record;
   const id = inspected ?? scene.focus;
@@ -94,13 +94,14 @@ export const Inspector = memo(function Inspector({ record, scene, inspected, onI
         <PuzzleBoard board={board} size={trace.size} movedTile={move?.tile} terms={terms} duration={fast ? 0 : 0.3} className="w-full" />
         <div className="flex min-w-0 flex-col gap-2">
           <Term label="已走步数" symbol="g" value={g} tone="text-ink" animated={!fast} />
-          <Term label={record.heuristic === "ZERO" ? "不使用估计" : "剩余估计"} symbol="h" value={h} tone="text-magenta" animated={!fast} delta={parent >= 0 ? dh : null} />
+          <Term label={record.heuristic === "ZERO" ? "零估计" : "剩余估计"} symbol="h" value={h} tone="text-magenta" animated={!fast} delta={parent >= 0 ? dh : null} />
           <div className="flex items-baseline justify-between gap-2 rounded-lg bg-ink px-2.5 py-1.5 text-primary-foreground">
-            <span className="text-[11px] opacity-75">权值 f = g + h</span>
+            <span className="text-[11px] opacity-75">{record.algorithm === "Dijkstra" ? "估值 f = g + h" : "权值 f = g + h"}</span>
             <span className="type-data text-xl font-semibold">
               <NumberFlow value={f} animated={!fast} />
             </span>
           </div>
+          {record.algorithm === "Dijkstra" && <p className="text-[11px] leading-relaxed text-ink-soft">按 g 排序；h 和 f 仅供查看估计。</p>}
         </div>
       </div>
 
@@ -225,7 +226,7 @@ function BoundMeter({ f, bound, over }: { f: number; bound: number; over: boolea
 
 function HeuristicBreakdown({ record, board, terms, h }: { record: LoadedRecord; board: ArrayLike<number>; terms: number[] | null; h: number }) {
   if (record.heuristic === "ZERO") {
-    return <p className="rounded-lg bg-muted px-3 py-2 text-[12px] text-ink-soft">Dijkstra 不估计剩余步数，h 恒为 0，只按 g 排序。</p>;
+    return <p className="rounded-lg bg-muted px-3 py-2 text-[12px] text-ink-soft">零启发函数对所有棋盘都返回 0，因此 h 恒为 0。</p>;
   }
   if (!terms) {
     return (

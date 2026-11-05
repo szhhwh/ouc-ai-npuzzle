@@ -44,7 +44,6 @@ export function validateRecord(input: unknown): RawRecord & { name: string } {
   requireValue(record && typeof record === "object" && !Array.isArray(record), "问题记录必须是对象。");
   requireValue(algorithms.has(record.algorithm), "不支持的算法名称。");
   requireValue(heuristics.has(record.heuristic), "不支持的启发函数名称。");
-  requireValue(record.algorithm !== "Dijkstra" || record.heuristic === "ZERO", "Dijkstra 记录必须使用 ZERO 启发函数。");
   requireValue(record.name == null || typeof record.name === "string", "问题名称必须是文字。");
   requireValue(Array.isArray(record.states) && record.states.length > 0, "记录缺少完整解路径。");
   const length = record.states[0]?.length;

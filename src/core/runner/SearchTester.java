@@ -24,7 +24,7 @@ import java.util.Scanner;
  */
 public final class SearchTester {
 
-    /** 搜索引擎的合法取值，dijkstra 的启发函数恒为 0，忽略启发函数参数 */
+    /** 搜索引擎的合法取值，算法与启发函数分别选择。 */
     private static final List<String> ENGINES = List.of("astar", "ida", "nida", "dijkstra");
 
     public static void main(String[] args) throws ClassNotFoundException,

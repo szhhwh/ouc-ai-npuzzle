@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { compactRecord } from "@/data/compact";
-import type { CompactTrace, RawRecord } from "@/data/types";
+import { ALGORITHMS, HEURISTICS, type CompactTrace, type RawRecord } from "@/data/types";
 import { validateRecord } from "@/data/validate";
 import { layoutTree, SLOT } from "@/replay/layout";
 import { countersAt, frontierAt, isOpen, nextBoundAt, sceneAt, type Scene } from "@/replay/model";
@@ -11,9 +11,65 @@ import nida from "./fixtures/nida.json";
 const records = [...astar.results, ...ida.results, ...nida.results] as unknown as RawRecord[];
 const clone = (record: RawRecord): RawRecord => structuredClone(record);
 
+const oneMoveDijkstra: RawRecord = {
+  algorithm: "Dijkstra",
+  heuristic: "MANHATTAN",
+  states: [[1, 2, 3, 4, 5, 6, 7, 0, 8], [1, 2, 3, 4, 5, 6, 7, 8, 0]],
+  goal: [1, 2, 3, 4, 5, 6, 7, 8, 0],
+  timeMs: 0,
+  generated: 3,
+  expanded: 1,
+  trace: {
+    complete: true,
+    nodes: [
+      { id: 0, parent: null, board: [1, 2, 3, 4, 5, 6, 7, 0, 8], g: 0, h: 1, f: 1, status: "frontier" },
+      { id: 1, parent: 0, board: [1, 2, 3, 4, 5, 6, 7, 8, 0], g: 1, h: 0, f: 1, status: "frontier" },
+      { id: 2, parent: 0, board: [1, 2, 3, 4, 0, 6, 7, 5, 8], g: 1, h: 2, f: 3, status: "frontier" },
+      { id: 3, parent: 0, board: [1, 2, 3, 4, 5, 6, 0, 7, 8], g: 1, h: 2, f: 3, status: "frontier" },
+    ],
+    frames: [
+      { current: 0, children: [1, 2, 3], found: false, iteration: 0 },
+      { current: 1, children: [], found: true, iteration: 0 },
+    ],
+    solution: [0, 1],
+  },
+};
+
 describe("validateRecord", () => {
   it("accepts every Java export fixture", () => {
     for (const record of records) expect(() => validateRecord(record)).not.toThrow();
+  });
+
+  it("accepts Dijkstra with every exported heuristic and preserves its recorded h", () => {
+    for (const heuristic of HEURISTICS) {
+      const record = clone(oneMoveDijkstra);
+      record.heuristic = heuristic;
+      if (heuristic === "ZERO") {
+        for (const node of record.trace.nodes) {
+          node.h = 0;
+          node.f = node.g;
+        }
+      }
+      const loaded = compactRecord(validateRecord(record));
+      expect(loaded.heuristic).toBe(heuristic);
+      expect(Array.from(loaded.trace.h)).toEqual(record.trace.nodes.map((node) => node.h));
+    }
+  });
+
+  it("accepts ZERO independently of the selected algorithm", () => {
+    const goal = oneMoveDijkstra.goal;
+    for (const algorithm of ALGORITHMS) {
+      const record: RawRecord = {
+        algorithm, heuristic: "ZERO", states: [goal], goal, timeMs: 0, generated: 0, expanded: 0,
+        trace: {
+          complete: true,
+          nodes: [{ id: 0, parent: null, board: goal, g: 0, h: 0, f: 0, status: "frontier" }],
+          frames: [{ current: 0, children: [], found: true, iteration: 0, bound: 0 }],
+          solution: [0],
+        },
+      };
+      expect(() => validateRecord(record)).not.toThrow();
+    }
   });
 
   it("rejects a solution path with an illegal move", () => {
@@ -75,6 +131,17 @@ describe("replay model", () => {
         expect(frontierAt(trace, scene, 1).top[0].id).toBe(scene.current);
       }
     }
+  });
+
+  it("Dijkstra groups and orders candidates by g while retaining different h and f values", () => {
+    const { trace } = compactRecord(validateRecord(oneMoveDijkstra));
+    const scene = sceneAt(trace, trace.shotStart[1]);
+    const frontier = frontierAt(trace, scene, 3);
+    expect(frontier.top.map((entry) => entry.id)).toEqual([1, 2, 3]);
+    expect(frontier.top.map((entry) => entry.f)).toEqual([1, 3, 3]);
+    expect(frontier.top.map((entry) => entry.priority)).toEqual([1, 1, 1]);
+    expect(frontier.ties).toBe(3);
+    expect(frontier.histogram).toEqual([{ value: 1, count: 3 }]);
   });
 
   it("IDA* picks open nodes within the bound and the next bound is the smallest f that exceeded it", () => {

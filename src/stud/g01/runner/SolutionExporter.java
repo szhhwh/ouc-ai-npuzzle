@@ -33,7 +33,7 @@ public final class SolutionExporter {
     public static void main(String[] args) throws IOException {
         if (args.length != 4 && args.length != 5) {
             throw new IllegalArgumentException(
-                    "用法: SolutionExporter input output.json astar|ida|nida|dijkstra MANHATTAN,MISPLACED [--allow-pdb]");
+                    "用法: SolutionExporter input output.json astar|ida|nida|dijkstra ZERO,MANHATTAN,MISPLACED,DISJOINT_PATTERN [--allow-pdb]");
         }
         String engine = args[2].toLowerCase(Locale.ROOT);
         if (!List.of("astar", "ida", "nida", "dijkstra").contains(engine)) {
@@ -51,7 +51,7 @@ public final class SolutionExporter {
         if (Files.exists(output)) {
             throw new IllegalArgumentException("输出已存在，请选择新文件，避免覆盖实验");
         }
-        List<HeuristicType> kinds = parseHeuristics(engine, args[3], allowPdb);
+        List<HeuristicType> kinds = parseHeuristics(args[3], allowPdb);
         PuzzleFeeder feeder = new PuzzleFeeder();
         Path temporary =
                 Files.createTempFile(
@@ -88,13 +88,7 @@ public final class SolutionExporter {
                         writeRecord(
                                 out, input, engine, kind, problem, searcher, millis, states, trace);
                         System.out.println(
-                                "已导出实例 "
-                                        + index
-                                        + " / "
-                                        + (engine.equals("dijkstra") ? "ZERO" : kind)
-                                        + " / "
-                                        + path.size()
-                                        + " 步");
+                                "已导出实例 " + index + " / " + kind + " / " + path.size() + " 步");
                     }
                 }
                 if (index == 0) throw new IllegalArgumentException("输入没有实例");
@@ -108,15 +102,7 @@ public final class SolutionExporter {
         }
     }
 
-    private static List<HeuristicType> parseHeuristics(
-            String engine, String names, boolean allowPdb) {
-        if (engine.equals("dijkstra")) {
-            if (!names.equalsIgnoreCase("ZERO") && !names.equalsIgnoreCase("MANHATTAN")) {
-                throw new IllegalArgumentException("Dijkstra 仅接受 ZERO（或默认 MANHATTAN），输出使用 ZERO");
-            }
-            if (allowPdb) throw new IllegalArgumentException("Dijkstra 不使用 PDB，不能传入 --allow-pdb");
-            return List.of(HeuristicType.MANHATTAN);
-        }
+    private static List<HeuristicType> parseHeuristics(String names, boolean allowPdb) {
         LinkedHashSet<HeuristicType> kinds = new LinkedHashSet<>();
         for (String name : names.split(",", -1)) {
             HeuristicType kind;
@@ -127,7 +113,8 @@ public final class SolutionExporter {
             }
             if (kind != HeuristicType.MANHATTAN
                     && kind != HeuristicType.MISPLACED
-                    && kind != HeuristicType.DISJOINT_PATTERN) {
+                    && kind != HeuristicType.DISJOINT_PATTERN
+                    && kind != HeuristicType.ZERO) {
                 throw new IllegalArgumentException("不支持的 N-Puzzle 启发函数: " + kind);
             }
             if (!kinds.add(kind)) throw new IllegalArgumentException("重复启发函数: " + kind);
@@ -147,12 +134,11 @@ public final class SolutionExporter {
             HeuristicType kind,
             NPuzzleProblem problem,
             SearchTrace trace) {
-        if (engine.equals("nida") && kind == HeuristicType.DISJOINT_PATTERN) {
-            return new NPuzzleIdaStar(trace);
+        Predictor predictor = feeder.getPredictor(kind);
+        if (engine.equals("nida")) {
+            return new NPuzzleIdaStar(predictor, trace);
         }
-        Predictor predictor =
-                engine.equals("dijkstra") ? (state, goal) -> 0 : feeder.getPredictor(kind);
-        if (engine.equals("ida") || engine.equals("nida")) {
+        if (engine.equals("ida")) {
             return new IdAStar(new StackFrontier(), predictor, trace);
         }
         SearchTrace.BestFirstObservation observation =
@@ -192,7 +178,7 @@ public final class SolutionExporter {
                 "{\"name\":\"Untitled Problem\",\"algorithm\":"
                         + quote(algorithm)
                         + ",\"heuristic\":"
-                        + quote(engine.equals("dijkstra") ? "ZERO" : kind.name())
+                        + quote(kind.name())
                         + ",\"source\":\"Java\",\"sourceFile\":"
                         + quote(Objects.requireNonNull(input.getFileName()).toString())
                         + ",\"sourceRevision\":"

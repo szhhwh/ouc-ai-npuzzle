@@ -47,9 +47,8 @@ public abstract class EngineFeeder {
     /**
      * 用来做对比实验的IdAStar （Iterative Deepening AStar，迭代加深的AStar）
      */
-    public final AbstractSearcher getIdaStar(HeuristicType type) {
-        Predictor predictor = getPredictor(type);
-        // 获取Frontier，其Node以g(n)+h(n)的升序排列，相同时，按照g(n)的升序排列
+    public final AbstractSearcher getIdaStar(Predictor predictor) {
+        // 生成按深度优先顺序访问的搜索栈
         Frontier frontier = new StackFrontier();
         //生成IdAStar引擎（算法实例）
         return new IdAStar(frontier, predictor);
@@ -58,10 +57,9 @@ public abstract class EngineFeeder {
     /**
      * 用来做对比实验的AStar, 对所有问题都是一样的
      * 可配置使用不同的启发函数
-     * @param type 可配置的启发函数类型
+     * @param predictor 可配置的启发函数
      */
-    public final AbstractSearcher getAStar(HeuristicType type) {
-        Predictor predictor = getPredictor(type);
+    public final AbstractSearcher getAStar(Predictor predictor) {
         // 获取Frontier，其Node以g(n)+h(n)的升序排列，相同时，按照g(n)的升序排列
         Frontier frontier = getFrontier(EvaluationType.FULL);
         // 根据frontier和predictor生成AStar引擎
@@ -71,13 +69,13 @@ public abstract class EngineFeeder {
     /**
      * 用来做对比实验的Dijkstra，对所有的问题都是一样的
      * 
+     * @param predictor 计算并记录的启发函数，队列排序仍只使用路径代价
      * @return Dijkstra搜索算法
      */
-    public final AbstractSearcher getDijkstra() {
+    public final AbstractSearcher getDijkstra(Predictor predictor) {
         // 获取Frontier，其Node以g(n)的升序排列
         Frontier frontier = getFrontier(EvaluationType.PATH_COST);
-        // predictor：h(n)≡0，即Dijkstra算法
-        return new BestFirstSearcher(frontier, (state, goal) -> 0);
+        return new BestFirstSearcher(frontier, predictor);
     }
 
     /**
@@ -88,25 +86,30 @@ public abstract class EngineFeeder {
      * @return 搜索引擎实例
      */
     public final AbstractSearcher getSearcher(String engine, HeuristicType type) {
+        return getSearcher(engine, getPredictor(type));
+    }
+
+    /** 按引擎名和启发函数生成搜索引擎。 */
+    public final AbstractSearcher getSearcher(String engine, Predictor predictor) {
         switch (engine.toLowerCase(Locale.ROOT)) {
             case "ida":
-                return getIdaStar(type);
+                return getIdaStar(predictor);
             case "nida":
-                return getNIdaStar(type);
+                return getNIdaStar(predictor);
             case "dijkstra":
-                return getDijkstra();
+                return getDijkstra(predictor);
             default:
-                return getAStar(type);
+                return getAStar(predictor);
         }
     }
 
     /**
      * N-Puzzle专用IdAStar，默认退化为通用IdAStar，由需要特化加速的Feeder覆盖。
      *
-     * @param type 可配置的启发函数类型
+     * @param predictor 可配置的启发函数
      * @return N-Puzzle专用IdAStar
      */
-    public AbstractSearcher getNIdaStar(HeuristicType type) {
-        return getIdaStar(type);
+    public AbstractSearcher getNIdaStar(Predictor predictor) {
+        return getIdaStar(predictor);
     }
 }

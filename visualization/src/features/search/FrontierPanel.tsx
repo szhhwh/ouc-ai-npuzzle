@@ -22,7 +22,7 @@ export const FrontierPanel = memo(function FrontierPanel(props: FrontierPanelPro
 
 function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: FrontierPanelProps) {
   const dijkstra = record.algorithm === "Dijkstra";
-  const maxF = Math.max(1, ...frontier.top.map((entry) => entry.f));
+  const maxPriority = Math.max(1, ...frontier.top.map((entry) => entry.priority));
   const histogram = frontier.histogram.slice(0, 14);
   const maxCount = Math.max(1, ...histogram.map((bin) => bin.count));
   const headLabel = scene.phase === "merge" || scene.phase === "ready" ? "下一个取出" : "队首";
@@ -38,8 +38,8 @@ function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: Fro
     >
       <span className="type-data text-[11px] text-ink-soft">#{entry.id}</span>
       <span className="flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
-        <span className="bg-ink" style={{ width: `${(entry.g / maxF) * 100}%` }} />
-        <span className="bg-magenta" style={{ width: `${((entry.f - entry.g) / maxF) * 100}%` }} />
+        <span className="bg-ink" style={{ width: `${(entry.g / maxPriority) * 100}%` }} />
+        {!dijkstra && <span className="bg-magenta" style={{ width: `${((entry.f - entry.g) / maxPriority) * 100}%` }} />}
       </span>
       <span className="type-data text-right text-[12px] font-semibold text-ink">{dijkstra ? `g ${entry.g}` : `f ${entry.f}`}</span>
       {rank === 0 && <span className="col-span-3 -mt-0.5 text-[10px] font-semibold text-sea">{headLabel}</span>}
@@ -83,16 +83,16 @@ function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: Fro
       {histogram.length > 1 && (
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] text-ink-soft">{dijkstra ? "候选按 g 分布" : "候选按 f 分布"}</span>
-          <div className="flex h-12 items-end gap-1" role="img" aria-label={histogram.map((bin) => `f ${bin.f}：${bin.count} 个`).join("，")}>
+          <div className="flex h-12 items-end gap-1" role="img" aria-label={histogram.map((bin) => `${dijkstra ? "g" : "f"} ${bin.value}：${bin.count} 个`).join("，")}>
             {histogram.map((bin, index) => (
-              <div key={bin.f} className="flex min-w-0 flex-1 flex-col items-center gap-0.5">
+              <div key={bin.value} className="flex min-w-0 flex-1 flex-col items-center gap-0.5">
                 <motion.div
                   className={cn("w-full rounded-sm", index === 0 ? "bg-sea" : "bg-ink/25")}
                   initial={false}
                   animate={{ height: `${Math.max(2, (bin.count / maxCount) * 36)}px` }}
                   transition={{ duration: fast ? 0 : 0.25 }}
                 />
-                <span className="type-data text-[9px] text-ink-soft">{bin.f}</span>
+                <span className="type-data text-[9px] text-ink-soft">{bin.value}</span>
               </div>
             ))}
           </div>

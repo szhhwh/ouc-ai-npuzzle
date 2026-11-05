@@ -1,6 +1,8 @@
 package core.solver.algorithm.heuristic;
 
 public enum HeuristicType {
+    ZERO,  // 零启发，适用于所有问题
+
     //Npuzzle的启发函数
     MISPLACED,  // 不在位将牌
     MANHATTAN,  // 曼哈顿距离

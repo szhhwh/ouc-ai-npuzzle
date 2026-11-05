@@ -14,7 +14,7 @@ final class ProductPdbContext extends PdbContext {
     }
 
     ProductPdbContext(PuzzleBoard initial, DisjointPdbHeuristic.Tables tables, PdbOptions options) {
-        super(initial);
+        super(initial, tables.goalCells);
         tbl = tables;
         incremental = options.incremental();
         symmetric = options.symmetry() && tbl.symmetric;
