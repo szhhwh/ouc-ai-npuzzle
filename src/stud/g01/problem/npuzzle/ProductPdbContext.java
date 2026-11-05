@@ -7,10 +7,17 @@ final class ProductPdbContext extends PdbContext {
     private final int[] tileGroup, tileWeight, mirroredGroup, mirroredWeight;
     private final int[] transpose;
     private final int[] idx, idxSym, values, symmetricValues;
+    private final boolean incremental;
 
     ProductPdbContext(PuzzleBoard initial, DisjointPdbHeuristic.Tables tables) {
+        this(initial, tables, PdbOptions.fromSystemProperties());
+    }
+
+    ProductPdbContext(PuzzleBoard initial, DisjointPdbHeuristic.Tables tables, PdbOptions options) {
         super(initial);
         tbl = tables;
+        incremental = options.incremental();
+        symmetric = options.symmetry() && tbl.symmetric;
 
         tileGroup = tbl.tileGroup;
         tileWeight = tbl.tileWeight;
@@ -35,7 +42,7 @@ final class ProductPdbContext extends PdbContext {
             values[g] = tbl.tables[g][idx[g]] & 0xFF;
             directHeuristic += values[g];
 
-            if (tbl.symmetric) {
+            if (symmetric) {
                 int es = 0;
                 for (int j = 0; j < tiles.length; j++) {
                     // A diagonal reflection is its own inverse.
@@ -47,11 +54,21 @@ final class ProductPdbContext extends PdbContext {
                 symmetricHeuristic += symmetricValues[g];
             }
         }
-        symmetric = tbl.symmetric;
     }
 
     @Override
     void prepareValues(Move move) {
+        if (!incremental) {
+            // Rebuild the child's complete inverse encoding and query every group.
+            long positions = 0;
+            for (int i = 0; i < cells; i++) {
+                int position = i == move.from ? move.to : i == move.to ? move.from : i;
+                positions |= (long) position << (board[i] * 4);
+            }
+            move.direct = tbl.hPositions(positions, move.to, false);
+            move.symmetric = symmetric ? tbl.hPositions(positions, transpose[move.to], true) : 0;
+            return;
+        }
         int g = tileGroup[move.tile];
         move.group = g;
         move.oldIndex = idx[g];
@@ -76,6 +93,7 @@ final class ProductPdbContext extends PdbContext {
 
     @Override
     void updateValues(Move move, boolean undo) {
+        if (!incremental) return;
         int delta = undo ? move.from - move.to : move.to - move.from;
         for (int g = 0; g < idx.length; g++) idx[g] += delta;
         idx[move.group] = undo ? move.oldIndex : move.index;

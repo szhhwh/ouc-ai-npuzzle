@@ -37,11 +37,17 @@ public final class DisjointPdbHeuristic {
      * @return 启发函数
      */
     public static Predictor predictor() {
+        return predictor(PdbOptions.fromSystemProperties());
+    }
+
+    /** 普通搜索逐次完整查表；仅 symmetry 选项影响启发值。 */
+    public static Predictor predictor(PdbOptions options) {
+        boolean symmetry = options.symmetry();
         return (state, goal) -> {
             PuzzleBoard target = (PuzzleBoard) goal;
             return target.size() == 4
-                    ? RegularPdbHeuristic.tablesFor(target).hMax((PuzzleBoard) state)
-                    : tablesFor(target).hMax((PuzzleBoard) state);
+                    ? RegularPdbHeuristic.tablesFor(target).hMax((PuzzleBoard) state, symmetry)
+                    : tablesFor(target).hMax((PuzzleBoard) state, symmetry);
         };
     }
 
@@ -155,14 +161,18 @@ public final class DisjointPdbHeuristic {
 
         /** 对称增强查询，取直接查表和与对称态查表中的较大值；不满足对称条件时退化为直接查询 */
         int hMax(PuzzleBoard state) {
+            return hMax(state, true);
+        }
+
+        int hMax(PuzzleBoard state, boolean useSymmetry) {
             long positions = state.positions();
             int direct = hPositions(positions, state.blank(), false);
-            if (!symmetric) return direct;
+            if (!useSymmetry || !symmetric) return direct;
             int mirrored = hPositions(positions, transpose[state.blank()], true);
             return Math.max(direct, mirrored);
         }
 
-        private int hPositions(long positions, int blank, boolean mirrored) {
+        int hPositions(long positions, int blank, boolean mirrored) {
             int sum = 0;
             for (int g = 0; g < groups.length; g++) {
                 int index = 0;

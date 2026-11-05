@@ -5,8 +5,9 @@ import core.solver.algorithm.searcher.AbstractSearcher;
 import core.solver.queue.Node;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.Objects;
 
-/** N-Puzzle 的增量 PDB IDA*。3 阶使用乘积编码 3-3-2，4 阶使用无损连通分量编码 7-8。 */
+/** N-Puzzle 的 PDB IDA*。3 阶使用乘积编码 3-3-2，4 阶使用无损连通分量编码 7-8。 */
 public final class NPuzzleIdaStar extends AbstractSearcher {
 
     /** Export observations copy boards only when explicitly enabled. */
@@ -21,6 +22,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     }
 
     private final Observer observer;
+    private final PdbOptions options;
 
     /** f 值的正无穷哨兵，dfs 返回它表示本子树没有因 f 超过界限而被剪枝的结点 */
     private static final int INFINITY = Integer.MAX_VALUE;
@@ -37,7 +39,16 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     }
 
     public NPuzzleIdaStar(Observer observer) {
+        this(PdbOptions.fromSystemProperties(), observer);
+    }
+
+    public NPuzzleIdaStar(boolean incremental, boolean symmetry) {
+        this(new PdbOptions(incremental, symmetry), null);
+    }
+
+    public NPuzzleIdaStar(PdbOptions options, Observer observer) {
         super(null);
+        this.options = Objects.requireNonNull(options);
         this.observer = observer;
     }
 
@@ -68,8 +79,12 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         PuzzleBoard goal = ((NPuzzleProblem) problem).goalBoard();
         PdbContext context =
                 switch (initial.size()) {
-                    case 3 -> new ProductPdbContext(initial, DisjointPdbHeuristic.tablesFor(goal));
-                    case 4 -> new ComponentPdbContext(initial, ComponentPdbContext.tablesFor(goal));
+                    case 3 ->
+                            new ProductPdbContext(
+                                    initial, DisjointPdbHeuristic.tablesFor(goal), options);
+                    case 4 ->
+                            new ComponentPdbContext(
+                                    initial, ComponentPdbContext.tablesFor(goal), options);
                     default ->
                             throw new UnsupportedOperationException(
                                     initial.size() + " 阶未定义增量 PDB（仅支持 3/4 阶）");

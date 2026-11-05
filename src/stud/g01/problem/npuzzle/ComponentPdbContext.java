@@ -58,11 +58,21 @@ final class ComponentPdbContext extends PdbContext {
     private final int[] masks = new int[2], masksSym = new int[2];
     private final int[] ranks = new int[2], ranksSym = new int[2];
     private final int[] values = new int[2], valuesSym = new int[2];
+    private final boolean incremental;
+    private final int[] fullPositions;
+    private final int[][] fullTuples;
 
     ComponentPdbContext(PuzzleBoard initial, Tables tables) {
+        this(initial, tables, PdbOptions.fromSystemProperties());
+    }
+
+    ComponentPdbContext(PuzzleBoard initial, Tables tables, PdbOptions options) {
         super(initial);
         this.tables = tables;
-        symmetric = tables.symmetric;
+        incremental = options.incremental();
+        symmetric = options.symmetry() && tables.symmetric;
+        fullPositions = incremental ? null : new int[16];
+        fullTuples = incremental ? null : new int[][] {new int[7], new int[8]};
         int[] pos = new int[16], posSym = new int[16];
         for (int i = 0; i < 16; i++) {
             pos[board[i]] = i;
@@ -107,6 +117,10 @@ final class ComponentPdbContext extends PdbContext {
 
     @Override
     void prepareValues(Move move) {
+        if (!incremental) {
+            prepareFullValues(move);
+            return;
+        }
         // The larger orientation is more likely to reject a candidate on its own.
         if (!symmetric || directHeuristic >= symmetricHeuristic) {
             prepareDirect(move);
@@ -124,6 +138,44 @@ final class ComponentPdbContext extends PdbContext {
             }
             prepareDirect(move);
         }
+    }
+
+    /** Rebuild all occupancy masks and permutation ranks, without parent query state. */
+    private void prepareFullValues(Move move) {
+        for (int i = 0; i < cells; i++) fullPositions[board[i]] = i;
+        fullPositions[0] = move.to;
+        fullPositions[move.tile] = move.from;
+        // Keep the same orientation order and bounded-query result as incremental search.
+        if (!symmetric || directHeuristic >= symmetricHeuristic) {
+            move.direct = fullDistance(move.to, false);
+            move.symmetric =
+                    symmetric && move.direct <= move.limit
+                            ? fullDistance(tables.transpose[move.to], true)
+                            : 0;
+        } else {
+            move.symmetric = fullDistance(tables.transpose[move.to], true);
+            move.direct = move.symmetric <= move.limit ? fullDistance(move.to, false) : 0;
+        }
+    }
+
+    private int fullDistance(int blank, boolean mirrored) {
+        int sum = 0;
+        for (int g = 0; g < GROUPS.length; g++) {
+            int[] tuple = fullTuples[g];
+            int occupied = 0;
+            for (int j = 0; j < tuple.length; j++) {
+                int tile = GROUPS[g][j];
+                tuple[j] =
+                        mirrored
+                                ? tables.transpose[fullPositions[tables.permutation[tile]]]
+                                : fullPositions[tile];
+                occupied |= 1 << tuple[j];
+            }
+            sum +=
+                    tables.data[g].distance(
+                            occupied, ComponentPdbTable.permutationRank(tuple), blank);
+        }
+        return sum;
     }
 
     private void prepareDirect(Move move) {
@@ -151,6 +203,7 @@ final class ComponentPdbContext extends PdbContext {
 
     @Override
     void updateValues(Move move, boolean undo) {
+        if (!incremental) return;
         ranks[move.group] = undo ? move.oldIndex : move.index;
         values[move.group] = undo ? move.oldValue : move.value;
         masks[move.group] ^= (1 << move.to) | (1 << move.from);

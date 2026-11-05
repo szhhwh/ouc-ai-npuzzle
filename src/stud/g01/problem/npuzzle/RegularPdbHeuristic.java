@@ -53,9 +53,13 @@ final class RegularPdbHeuristic {
         }
 
         int hMax(PuzzleBoard state) {
+            return hMax(state, true);
+        }
+
+        int hMax(PuzzleBoard state, boolean useSymmetry) {
             long positions = state.positions();
             int direct = h(positions, state.blank());
-            if (!symmetric) return direct;
+            if (!useSymmetry || !symmetric) return direct;
             long mirrored =
                     mirroredPositions[0][(int) positions & 65535]
                             | mirroredPositions[1][(int) (positions >>> 16) & 65535]
