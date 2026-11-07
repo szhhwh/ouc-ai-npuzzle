@@ -1,4 +1,4 @@
-import { Crosshair, Map as MapIcon, Maximize, Minimize, PanelRightClose, PanelRightOpen, Scan, Scissors, ZoomIn, ZoomOut } from "lucide-react";
+import { Crosshair, Map as MapIcon, Maximize, Minimize, PanelRightClose, PanelRightOpen, Scan, Scissors, X, ZoomIn, ZoomOut } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -102,8 +102,14 @@ export function SearchView({ record }: { record: LoadedRecord }) {
   const markers = useMemo(() => (trace.depthFirst ? iterationShots(trace).slice(1) : []), [trace]);
 
   const [panelOpen, setPanelOpen] = useState(wide);
+  const [panelView, setPanelView] = useState<"node" | "frontier">("node");
   const [minimapOpen, setMinimapOpen] = useState(true);
   useEffect(() => setPanelOpen(wide), [wide]);
+
+  const inspect = useCallback((id: number | null) => {
+    searchActions.inspect(id);
+    setPanelView("node");
+  }, []);
 
   // ---------------------------------------------------------------- renderer
   const rootRef = useRef<HTMLDivElement>(null);
@@ -117,7 +123,7 @@ export function SearchView({ record }: { record: LoadedRecord }) {
 
   useLayoutEffect(() => {
     const renderer = new TreeRenderer(canvasRef.current!, trace, {
-      onInspect: (id) => searchActions.inspect(id),
+      onInspect: inspect,
       onUserCamera: () => searchActions.setFollow(false),
     });
     rendererRef.current = renderer;
@@ -126,7 +132,7 @@ export function SearchView({ record }: { record: LoadedRecord }) {
       renderer.destroy();
       rendererRef.current = null;
     };
-  }, [trace]);
+  }, [trace, inspect]);
 
   useLayoutEffect(() => {
     rendererRef.current?.attachMinimap(minimapOpen && wide ? minimapRef.current : null);
@@ -211,7 +217,7 @@ export function SearchView({ record }: { record: LoadedRecord }) {
 
   return (
     <div ref={rootRef} className="relative h-full min-h-0 overflow-hidden bg-paper">
-      <canvas ref={canvasRef} className="absolute inset-0 size-full touch-none select-none" aria-label="搜索树，可拖动和缩放；点击节点查看计算" />
+      <canvas ref={canvasRef} className="absolute inset-0 size-full touch-none select-none" aria-label="搜索树视图：支持画布平移与缩放，点击任意节点查看计算详情" />
 
       {/* Narration */}
       <div
@@ -226,9 +232,6 @@ export function SearchView({ record }: { record: LoadedRecord }) {
         <div className="flex items-center gap-2">
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", panelScene.goal ? "bg-brass text-primary-foreground" : "bg-ink text-primary-foreground")}>
             {narration.tag}
-          </span>
-          <span className="truncate text-[11px] text-ink-soft">
-            {record.name} · {record.algorithm}
           </span>
         </div>
         <AnimatePresence mode="wait" initial={false}>
@@ -266,7 +269,7 @@ export function SearchView({ record }: { record: LoadedRecord }) {
         <Tool label="显示整棵树" keys="0" onClick={fit}>
           <Scan />
         </Tool>
-        <Tool label={follow ? "镜头跟随当前节点（已开启）" : "镜头跟随当前节点"} keys="C" pressed={follow} onClick={toggleFollow}>
+        <Tool label={follow ? "镜头跟随当前节点 · 已开启" : "镜头跟随当前节点"} keys="C" pressed={follow} onClick={toggleFollow}>
           <Crosshair />
         </Tool>
         <Tool label={showPruned ? "隐藏已剪枝节点" : "显示已剪枝节点"} keys="P" pressed={showPruned} onClick={() => searchActions.setShowPruned(!showPruned)}>
@@ -275,7 +278,7 @@ export function SearchView({ record }: { record: LoadedRecord }) {
         <Tool label={minimapOpen ? "隐藏缩略图" : "显示缩略图"} pressed={minimapOpen} onClick={() => setMinimapOpen((open) => !open)}>
           <MapIcon />
         </Tool>
-        <Tool label={panelOpen ? "收起计算面板" : "展开计算面板"} pressed={panelOpen} onClick={() => setPanelOpen((open) => !open)}>
+        <Tool label={panelOpen ? "收起计算详情" : "展开计算详情"} pressed={panelOpen} onClick={() => setPanelOpen((open) => !open)}>
           {panelOpen ? <PanelRightClose /> : <PanelRightOpen />}
         </Tool>
         <div className="mx-1 my-0.5 h-px bg-rule" />
@@ -290,27 +293,51 @@ export function SearchView({ record }: { record: LoadedRecord }) {
           <motion.aside
             ref={panelRef}
             key="panel"
-            aria-label="计算面板"
+            aria-label="节点计算详情"
             className={cn(
               "glass absolute z-10 flex flex-col overflow-hidden rounded-2xl border border-rule/80 shadow-[0_18px_40px_-28px_rgb(19_42_59/0.7)]",
-              wide ? "top-4 right-4 w-[360px]" : "inset-x-3 top-3 max-h-[60%]",
+              wide ? "top-4 right-4 w-[360px]" : "inset-x-3 max-h-[60%]",
             )}
-            style={wide ? { bottom: "calc(var(--dock-h, 128px) + 1.75rem)" } : undefined}
-            initial={wide ? { opacity: 0, x: 40 } : { opacity: 0, y: -20 }}
+            style={{ bottom: "calc(var(--dock-h, 128px) + 1.75rem)" }}
+            initial={wide ? { opacity: 0, x: 40 } : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, x: 0, y: 0 }}
-            exit={wide ? { opacity: 0, x: 40 } : { opacity: 0, y: -20 }}
+            exit={wide ? { opacity: 0, x: 40 } : { opacity: 0, y: 20 }}
             transition={{ duration: 0.24, ease: [0.22, 0.9, 0.24, 1] }}
           >
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="flex flex-col gap-6 p-4">
+            <div className="flex shrink-0 items-center gap-2 border-b border-rule px-3 py-2">
+              <nav aria-label="节点计算详情" className="flex min-w-0 flex-1 gap-1">
+                {(["node", "frontier"] as const).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    aria-pressed={panelView === view}
+                    onClick={() => setPanelView(view)}
+                    className={cn(
+                      "rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors",
+                      panelView === view ? "bg-ink text-primary-foreground" : "text-ink-soft hover:bg-muted hover:text-ink",
+                    )}
+                  >
+                    {view === "node" ? "节点计算" : trace.depthFirst ? "迭代与界限" : "候选队列"}
+                  </button>
+                ))}
+              </nav>
+              <Button variant="ghost" size="icon-sm" onClick={() => setPanelOpen(false)} aria-label="收起计算详情" title="收起计算详情">
+                <X />
+              </Button>
+            </div>
+            <ScrollArea className={cn("min-h-0 flex-1", panelView !== "node" && "hidden")}>
+              <div className="p-4">
                 <Inspector record={record} scene={panelScene} inspected={inspected} onInspect={searchActions.inspect} onLocate={locate} fast={fast} />
-                <div className="h-px bg-rule" />
+              </div>
+            </ScrollArea>
+            <ScrollArea className={cn("min-h-0 flex-1", panelView !== "frontier" && "hidden")}>
+              <div className="p-4">
                 <FrontierPanel
                   record={record}
                   scene={panelScene}
                   frontier={frontier}
                   inspected={inspected}
-                  onInspect={searchActions.inspect}
+                  onInspect={inspect}
                   onJumpIteration={jumpIteration}
                   fast={fast}
                 />
@@ -332,7 +359,7 @@ export function SearchView({ record }: { record: LoadedRecord }) {
             exit={{ opacity: 0, scale: 0.92 }}
             transition={{ duration: 0.18 }}
           >
-            <canvas ref={minimapRef} className="block h-[120px] w-[200px] cursor-crosshair" aria-label="缩略图：点击或拖动以移动视野" />
+            <canvas ref={minimapRef} className="block h-[120px] w-[200px] cursor-crosshair" aria-label="导航缩略图：点击或拖拽平移视野" />
           </motion.div>
         )}
       </AnimatePresence>
@@ -411,9 +438,6 @@ function Legend() {
           {item.label}
         </li>
       ))}
-      <li className="flex items-center gap-1.5">
-        <span className="type-data text-ink">g</span>+<span className="type-data text-magenta">h</span>=<span className="type-data font-semibold text-ink">f</span>
-      </li>
     </ul>
   );
 }

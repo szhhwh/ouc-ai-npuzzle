@@ -171,7 +171,6 @@ export function PathView({ record }: { record: LoadedRecord }) {
             <Metric label="生成节点" value={record.generated} />
             <Metric label="扩展节点" value={record.expanded} />
           </div>
-          <p className="text-xs text-ink-soft">耗时包含记录搜索过程的开销，不能当作性能基准。</p>
         </motion.section>
 
         <motion.section {...enter(3)} aria-labelledby="path-chart-title" className="flex flex-col gap-2">
@@ -192,7 +191,7 @@ export function PathView({ record }: { record: LoadedRecord }) {
           <div className="rounded-lg border border-rule bg-surface p-2">
             <HeuristicChart hs={hs} step={step} onSeek={seekTo} />
           </div>
-          <p className="text-xs text-ink-soft">启发值可采纳时，品红线不会高过虚线。点击图表跳到对应步。</p>
+          <p className="text-xs text-ink-soft">启发函数满足可采纳性时，h 曲线不高于实际剩余步数。点击图表可跳转至对应步。</p>
         </motion.section>
 
         <motion.section
@@ -201,7 +200,7 @@ export function PathView({ record }: { record: LoadedRecord }) {
           className="flex flex-col gap-2 lg:min-h-56 lg:flex-1"
         >
           <h3 id="path-moves-title" className="text-sm font-medium text-ink">
-            每一步
+            移动步骤
           </h3>
           <MoveList
             moves={moves}

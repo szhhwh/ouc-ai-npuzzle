@@ -82,7 +82,7 @@ function RowActions({ meta, onRequestDelete }: { meta: RecordMeta; onRequestDele
     <div className="flex items-center justify-end gap-1">
       {current ? (
         <Button size="sm" variant="ghost" disabled className="w-[4.75rem] text-sea">
-          已载入
+          当前查看
         </Button>
       ) : (
         <Button
@@ -93,7 +93,7 @@ function RowActions({ meta, onRequestDelete }: { meta: RecordMeta; onRequestDele
           className={cn("w-[4.75rem] bg-surface", loading && "disabled:opacity-100")}
         >
           {loading && <LoaderCircle aria-hidden className="animate-spin text-sea" />}
-          载入
+          查看
         </Button>
       )}
       <Tooltip>
@@ -137,12 +137,12 @@ function buildColumns(onRequestDelete: (ids: string[]) => void) {
       ),
     }),
     helper.accessor("name", {
-      header: ({ column }) => <SortHeader column={column} label="起点 / 名称" />,
+      header: ({ column }) => <SortHeader column={column} label="记录名称" />,
       sortFn: by((meta) => meta.name),
       cell: ({ row }) => <NameCell meta={row.original} />,
     }),
     helper.accessor("size", {
-      header: ({ column }) => <SortHeader column={column} label="棋盘" />,
+      header: ({ column }) => <SortHeader column={column} label="规格" />,
       sortFn: by((meta) => meta.size),
       cell: ({ row }) => <span className="type-data text-xs">{`${row.original.size}×${row.original.size}`}</span>,
     }),
@@ -157,7 +157,7 @@ function buildColumns(onRequestDelete: (ids: string[]) => void) {
       ),
     }),
     helper.accessor("moves", {
-      header: ({ column }) => <SortHeader column={column} label="路径" end />,
+      header: ({ column }) => <SortHeader column={column} label="解步数" end />,
       sortFn: by((meta) => meta.moves),
       cell: ({ row }) => (
         <span>

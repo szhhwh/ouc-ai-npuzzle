@@ -428,9 +428,11 @@ export class TreeRenderer {
       return;
     }
     const anchor = scene.phase === "ready" ? 0 : scene.current >= 0 ? scene.current : scene.focus;
-    const point = this.positionOf(anchor) ?? this.positionOf(scene.rangeStart);
+    // Follow the next-pick highlight as soon as it appears, if it belongs to the visible iteration.
+    const next = this.positionOf(scene.next);
+    const point = next ?? this.positionOf(anchor) ?? this.positionOf(scene.rangeStart);
     if (!point) return;
-    const targetY = point.y + (scene.childEnd > scene.childStart && scene.phase !== "ready" ? ROW * 0.5 : 0);
+    const targetY = point.y + (!next && scene.childEnd > scene.childStart && scene.phase !== "ready" ? ROW * 0.5 : 0);
     const area = this.area();
     const k = this.followK;
     const sx = point.x * k + this.transform.x;
@@ -605,11 +607,11 @@ export class TreeRenderer {
         continue;
       }
       const reveal = this.revealAt[id];
-      const p = reveal ? clamp01((now - reveal) / anim) : 1;
-      if (p < 1) {
+      const p = reveal && this.animMs > 0 ? (now - reveal) / anim : 1.5;
+      if (p < 1.5) {
         growing.push({ id, p });
         animating = true;
-        continue;
+        if (p < 1) continue;
       }
       const onRoute = scene.goal && this.solutionMask[id] && this.solutionMask[parent] && trace.g[id] <= solutionReach;
       this.edge(onRoute ? route : trace.status[id] >= FIRST_PRUNED ? faint : plain, px, py, cx, cy);
@@ -637,12 +639,14 @@ export class TreeRenderer {
       const py = this.dispY[parent - layout.start];
       ctx.strokeStyle = palette.sea;
       ctx.lineWidth = 2;
+      ctx.globalAlpha = p <= 1 ? 1 : 1 - easeCubicInOut((p - 1) * 2);
       ctx.beginPath();
       ctx.moveTo(px, py + HALF_H);
-      const e = easeCubicOut(p);
+      const e = easeCubicOut(clamp01(p));
       ctx.lineTo(px + (cx - px) * e, py + HALF_H + (cy - HALF_H - py - HALF_H) * e);
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
 
     // Leaving nodes fade where they were.
     this.exiting = this.exiting.filter((item) => now - item.start < anim);
@@ -951,7 +955,7 @@ export class TreeRenderer {
     const index = this.hovered - this.layout.start;
     const sx = this.dispX[index] * this.transform.k + this.transform.x;
     const sy = (this.dispY[index] - HALF_H) * this.transform.k + this.transform.y - 10;
-    const label = `#${this.hovered}  g ${trace.g[this.hovered]} + h ${trace.h[this.hovered]} = f ${trace.g[this.hovered] + trace.h[this.hovered]}${trace.pathCostOnly ? "（按 g 排序）" : ""}`;
+    const label = `#${this.hovered}  g ${trace.g[this.hovered]} · h ${trace.h[this.hovered]} · f ${trace.g[this.hovered] + trace.h[this.hovered]}${trace.pathCostOnly ? " · 按 g 排序" : ""}`;
     ctx.save();
     ctx.font = `500 11px ${MONO}`;
     const width = ctx.measureText(label).width + 18;

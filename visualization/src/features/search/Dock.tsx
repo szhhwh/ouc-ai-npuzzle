@@ -121,13 +121,13 @@ export const Dock = forwardRef<HTMLDivElement, DockProps>(function Dock(
             {(scene.shot + 1).toLocaleString("zh-CN")} / {total.toLocaleString("zh-CN")}
           </span>
           <Select value={String(speed)} onValueChange={(value) => onSpeed(Number(value) as Speed)}>
-            <SelectTrigger size="sm" className="w-[6.75rem] bg-surface" aria-label="播放速度">
+            <SelectTrigger size="sm" className="type-data w-[5.5rem] bg-surface" aria-label="播放速度">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" side="top" align="end">
               {SPEEDS.map((option) => (
-                <SelectItem key={option} value={String(option)}>
-                  {option}×{option === 1 ? " 讲解" : option >= 64 ? " 快进" : ""}
+                <SelectItem key={option} value={String(option)} className="type-data">
+                  {option}×
                 </SelectItem>
               ))}
             </SelectContent>

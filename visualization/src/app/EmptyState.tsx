@@ -60,10 +60,9 @@ export function EmptyState({ failure }: { failure: string | null }) {
           transition={{ duration: 0.4, delay: 0.1 }}
         >
           <div className="flex flex-col gap-3">
-            <span className="text-[12px] font-medium tracking-[0.12em] text-sea">N-PUZZLE · 搜索过程可视化</span>
-            <h1 className="type-display text-[clamp(28px,4vw,44px)] leading-[1.08] font-bold text-ink">导入一次 Java 搜索记录</h1>
+            <h1 className="type-display text-[clamp(28px,4vw,44px)] leading-[1.08] font-bold text-ink">导入算法搜索记录</h1>
             <p className="max-w-[46ch] text-[15px] leading-relaxed text-ink-soft">
-              SolutionExporter 导出的 JSON 记下了完整解路径，以及每一个被生成、扩展和剪枝的节点。导入后可以回放解路径，也可以逐步查看搜索树怎样展开。
+              导入求解记录 JSON 文件，即可单步回放解题路径，或交互式探索搜索树的生成、展开与剪枝过程。
             </p>
           </div>
           {failure && <p className="rounded-lg border border-signal/40 bg-signal-wash px-3 py-2 text-[13px] text-signal">{failure}</p>}
@@ -72,17 +71,16 @@ export function EmptyState({ failure }: { failure: string | null }) {
               <FileJson />
               选择 JSON 文件
             </Button>
-            <span className="text-[13px] text-ink-soft">或把文件拖到页面任意位置</span>
+            <span className="text-[13px] text-ink-soft">或直接把文件拖到页面任意位置</span>
           </div>
           <div className="flex flex-col gap-2">
-            <span className="text-[12px] text-ink-soft">还没有导出文件？在仓库根目录运行：</span>
+            <span className="text-[12px] text-ink-soft">还没有记录文件？可在终端运行以下命令快速生成：</span>
             <div className="flex items-start gap-2 rounded-xl border border-rule bg-surface p-3">
               <code className="type-data min-w-0 flex-1 text-[11.5px] leading-relaxed break-all text-ink">{EXPORT_COMMAND}</code>
               <Button variant="ghost" size="icon-sm" onClick={copy} aria-label="复制命令">
                 {copied ? <Check className="text-sea" /> : <Copy />}
               </Button>
             </div>
-            <span className="text-[12px] text-ink-soft">记录压缩保存在此浏览器中，不会上传到任何地方。</span>
           </div>
         </motion.div>
       </div>
@@ -122,7 +120,7 @@ export function DropOverlay() {
       >
         <FileJson className="size-10 text-sea" />
         <span className="type-display text-2xl font-bold text-ink">松开以导入</span>
-        <span className="text-[13px] text-ink-soft">只接受 Java 导出的 .json 文件，可一次放入多个</span>
+        <span className="text-[13px] text-ink-soft">支持导入 .json 文件，可一次拖入多个</span>
       </motion.div>
     </motion.div>
   );

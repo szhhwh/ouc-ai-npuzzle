@@ -8,10 +8,10 @@ export const HEURISTIC_NAMES: Record<Heuristic, string> = {
 };
 
 export const ALGORITHM_NOTES: Record<Algorithm, string> = {
-  "A*": "按 f = g + h 从候选队列取节点",
-  Dijkstra: "按已走步数 g 从候选队列取节点",
-  "IDA*": "在 f 界限内深度优先，超界后提高界限重来",
-  "NIDA*": "专用 IDA*：在 f 界限内深度优先，超界后提高界限重来",
+  "A*": "按综合代价 f 优先从候选队列选取节点",
+  Dijkstra: "按实际步数 g 优先从候选队列选取节点",
+  "IDA*": "设定 f 阈值进行深度优先搜索，超界后提高阈值迭代",
+  "NIDA*": "面向 N 数码优化的 IDA*，结合阈值迭代与路径剪枝",
 };
 
 /** Short tag shown on the tree and in lists. */
@@ -27,12 +27,12 @@ export const STATUS_TAGS: Record<NodeStatus, string> = {
 
 export const STATUS_REASONS: Record<NodeStatus, string> = {
   frontier: "保留为候选节点",
-  replaced: "以更低代价替换重复候选",
-  "closed-pruned": "已扩展的重复状态，剪枝",
-  "frontier-pruned": "候选中已有更优状态，剪枝",
-  "cycle-pruned": "返回当前路径中的状态，剪枝",
-  "bound-pruned": "权值超过本轮界限，剪枝",
-  "transposition-pruned": "已有代价更低的访问记录，剪枝",
+  replaced: "以更优代价替换重复候选",
+  "closed-pruned": "已扩展的重复状态，执行剪枝",
+  "frontier-pruned": "队列中已有更优路径，执行剪枝",
+  "cycle-pruned": "检测到路径环路，执行剪枝",
+  "bound-pruned": "代价值超出当前迭代界限，执行剪枝",
+  "transposition-pruned": "置换表记录已有更优路径，执行剪枝",
 };
 
 export type Direction = "up" | "down" | "left" | "right";

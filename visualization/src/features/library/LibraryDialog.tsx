@@ -92,19 +92,18 @@ function LibraryPanel() {
   return (
     <>
       <header className="relative shrink-0 border-b border-rule px-6 pt-6 pb-5 pr-16">
-        <p className="type-data text-[11px] font-medium tracking-[0.16em] text-sea">本地问题库</p>
-        <DialogTitle className="mt-2 flex items-baseline gap-2.5 text-2xl font-semibold text-ink">
-          <span className="type-display">问题记录</span>
+        <DialogTitle className="flex items-baseline gap-2.5 text-2xl font-semibold text-ink">
+          <span className="type-display">搜索记录</span>
           <span className="type-data text-base font-normal text-ink-soft">
             <NumberFlow value={metas.length} locales="zh-CN" />
             <span className="ml-1 font-sans text-sm">条</span>
           </span>
         </DialogTitle>
         <DialogDescription className="mt-1.5 max-w-prose text-sm text-ink-soft">
-          记录以 gzip 压缩保存在此浏览器中，清除网站数据会一并删除。
+          所有记录均保存在本地浏览器，支持随时切换、重命名与回放。
         </DialogDescription>
         <DialogClose asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="关闭问题记录" className="absolute top-4 right-4 text-ink-soft">
+          <Button variant="ghost" size="icon-sm" aria-label="关闭" className="absolute top-4 right-4 text-ink-soft">
             <X />
           </Button>
         </DialogClose>
@@ -119,7 +118,6 @@ function LibraryPanel() {
               <FileUp />
               导入记录
             </Button>
-            <p className="text-xs text-ink-soft">也可以把 JSON 文件拖到页面任意位置</p>
             <div className="ml-auto flex items-center gap-3">
               <p aria-live="polite" className="text-xs text-ink-soft">
                 <AnimatePresence initial={false}>
@@ -154,10 +152,10 @@ function LibraryPanel() {
 
       <footer className="shrink-0 border-t border-rule bg-paper/60 px-6 py-3 text-xs text-ink-soft">
         {empty ? (
-          "还没有保存的记录"
+          "暂无已保存的记录"
         ) : (
           <>
-            共 {metas.length} 条，压缩后占用 <span className="type-data text-ink">{formatBytes(totalBytes)}</span>
+            共 {metas.length} 条记录，占用本地空间 <span className="type-data text-ink">{formatBytes(totalBytes)}</span>
           </>
         )}
       </footer>
@@ -165,8 +163,8 @@ function LibraryPanel() {
       <AlertDialog open={confirm.open} onOpenChange={(open) => setConfirm((previous) => ({ ...previous, open }))}>
         <AlertDialogContent className="border-rule bg-surface">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-ink">删除 {confirm.ids.length} 条问题记录？</AlertDialogTitle>
-            <AlertDialogDescription>此操作无法撤销，压缩数据会从此浏览器中移除。</AlertDialogDescription>
+            <AlertDialogTitle className="text-ink">删除所选的 {confirm.ids.length} 条记录？</AlertDialogTitle>
+            <AlertDialogDescription>此操作无法撤销，确认从本地移除这些记录？</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
@@ -197,7 +195,7 @@ function EmptyState({
         {starting ? (
           <p className="flex items-center gap-2 text-sm text-ink-soft">
             <LoaderCircle aria-hidden className="size-4 animate-spin text-sea" />
-            正在读取本地问题库…
+            正在加载记录列表…
           </p>
         ) : (
           <>
@@ -205,8 +203,8 @@ function EmptyState({
               <LibraryBig aria-hidden className="size-6" />
             </div>
             <div className="space-y-1.5">
-              <h3 className="type-display text-lg font-semibold text-ink">导入第一个问题</h3>
-              <p className="max-w-sm text-sm text-ink-soft">选择 Java 导出的 JSON，解路径与完整搜索过程会一并保存。</p>
+              <h3 className="type-display text-lg font-semibold text-ink">暂无已保存的记录</h3>
+              <p className="max-w-sm text-sm text-ink-soft">导入 JSON 记录文件，解路径与完整搜索过程将自动保存到本地。</p>
               {failure && <p className="max-w-sm text-sm text-signal">{failure}</p>}
             </div>
             <Button onClick={onImport} disabled={busy}>

@@ -1,7 +1,7 @@
 import NumberFlow from "@number-flow/react";
-import { LocateFixed, X } from "lucide-react";
+import { ChevronDown, LocateFixed, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { PuzzleBoard } from "@/components/puzzle-board";
 import { Button } from "@/components/ui/button";
 import { STATUSES, type LoadedRecord } from "@/data/types";
@@ -18,13 +18,6 @@ const STATE_LABELS: Record<Exclude<NodeState, "pruned">, { label: string; tone: 
   superseded: { label: "已失效", tone: "bg-muted text-ink-soft" },
 };
 
-const STATE_SENTENCES: Record<Exclude<NodeState, "pruned">, (depthFirst: boolean) => string> = {
-  pending: () => "还没有生成。",
-  current: (depthFirst) => (depthFirst ? "正在访问，依次生成它的后继。" : "刚从候选队列取出，依次生成它的后继。"),
-  expanded: () => "已经扩展过，后继都已生成。",
-  open: (depthFirst) => (depthFirst ? "保留在搜索栈中，等待深度优先访问。" : "保留在候选队列中，等待取出。"),
-  superseded: (depthFirst) => (depthFirst ? "属于之前的迭代，本次迭代已从起点重新开始。" : "已被代价更低的同一状态替换。"),
-};
 
 interface InspectorProps {
   record: LoadedRecord;
@@ -39,6 +32,7 @@ interface InspectorProps {
 /** One node's board, costs and heuristic estimate, plus why it was kept or cut. */
 export const Inspector = memo(function Inspector({ record, scene, inspected, onInspect, onLocate, fast }: InspectorProps) {
   const { trace } = record;
+  const [calculationOpen, setCalculationOpen] = useState(true);
   const id = inspected ?? scene.focus;
   const board = boardOf(trace, id);
   const parent = trace.parent[id];
@@ -83,58 +77,54 @@ export const Inspector = memo(function Inspector({ record, scene, inspected, onI
             <LocateFixed />
           </Button>
           {inspected !== null && (
-            <Button variant="ghost" size="icon-sm" onClick={() => onInspect(null)} aria-label="回到当前步骤" title="回到当前步骤（Esc）">
+            <Button variant="ghost" size="icon-sm" onClick={() => onInspect(null)} aria-label="回到当前步骤" title="回到当前步骤 · Esc">
               <X />
             </Button>
           )}
         </div>
       </header>
 
-      <div className="grid grid-cols-[minmax(0,148px)_minmax(0,1fr)] items-center gap-4">
-        <PuzzleBoard board={board} size={trace.size} movedTile={move?.tile} terms={terms} duration={fast ? 0 : 0.3} className="w-full" />
-        <div className="flex min-w-0 flex-col gap-2">
-          <Term label="已走步数" symbol="g" value={g} tone="text-ink" animated={!fast} />
-          <Term label={record.heuristic === "ZERO" ? "零估计" : "剩余估计"} symbol="h" value={h} tone="text-magenta" animated={!fast} delta={parent >= 0 ? dh : null} />
-          <div className="flex items-baseline justify-between gap-2 rounded-lg bg-ink px-2.5 py-1.5 text-primary-foreground">
-            <span className="text-[11px] opacity-75">{record.algorithm === "Dijkstra" ? "估值 f = g + h" : "权值 f = g + h"}</span>
-            <span className="type-data text-xl font-semibold">
-              <NumberFlow value={f} animated={!fast} />
-            </span>
-          </div>
-          {record.algorithm === "Dijkstra" && <p className="text-[11px] leading-relaxed text-ink-soft">按 g 排序；h 和 f 仅供查看估计。</p>}
-        </div>
+      <PuzzleBoard
+        board={board}
+        size={trace.size}
+        movedTile={move?.tile}
+        terms={calculationOpen ? terms : null}
+        duration={fast ? 0 : 0.3}
+        className="mx-auto w-full max-w-[168px]"
+      />
+
+      <div className="type-data flex items-baseline justify-center gap-2 border-y border-rule py-3 text-[17px] font-semibold">
+        <span title="已走步数"><span className="mr-1 text-[12px] font-medium text-ink-soft">g</span><NumberFlow value={g} animated={!fast} /></span>
+        <span className="font-normal text-ink-soft">+</span>
+        <span className="text-magenta" title={record.heuristic === "ZERO" ? "零估计" : "剩余估计"}><span className="mr-1 text-[12px] font-medium">h</span><NumberFlow value={h} animated={!fast} /></span>
+        <span className="font-normal text-ink-soft">=</span>
+        <span title={record.algorithm === "Dijkstra" ? "估算总代价 f" : "综合代价 f"}><span className="mr-1 text-[12px] font-medium text-ink-soft">f</span><NumberFlow value={f} animated={!fast} /></span>
       </div>
 
-      {scene.bound >= 0 && (
-        <BoundMeter f={f} bound={scene.bound} over={overBound} />
+      {scene.bound >= 0 && <BoundMeter f={f} bound={scene.bound} over={overBound} />}
+
+      {move && (
+        <p className="text-[12px] leading-relaxed text-ink-soft">
+          由{" "}
+          <button type="button" className="type-data font-semibold text-sea underline-offset-2 hover:underline" onClick={() => onInspect(parent)}>
+            #{parent}
+          </button>{" "}
+          把 <b className="font-semibold text-ink">{move.tile}</b> 号块{DIRECTION_WORDS[move.direction]}。
+        </p>
       )}
 
-      <HeuristicBreakdown record={record} board={board} terms={terms} h={h} />
-
-      <div className="flex flex-col gap-1.5 text-[13px] leading-relaxed">
-        {move ? (
-          <p className="text-ink">
-            由{" "}
-            <button type="button" className="type-data font-semibold text-sea underline-offset-2 hover:underline" onClick={() => onInspect(parent)}>
-              #{parent}
-            </button>{" "}
-            把 <b className="font-semibold">{move.tile}</b> 号块{DIRECTION_WORDS[move.direction]}：g +1，h {dh > 0 ? `+${dh}` : dh === 0 ? "不变" : `−${-dh}`}，f{" "}
-            {dh + 1 === 0 ? "不变" : dh + 1 > 0 ? `+${dh + 1}` : `−${-(dh + 1)}`}。
-          </p>
-        ) : (
-          <p className="text-ink">起点：g = 0，f 就是 h。</p>
-        )}
-        <p className={cn(state === "pruned" ? "text-signal" : "text-ink-soft")}>
-          {isGoal
-            ? "这就是目标状态：取出它时搜索结束，沿父节点回溯得到解路径。"
-            : state === "pruned"
-              ? STATUS_REASONS[status]
+      {(state === "pruned" || state === "superseded" || status === "replaced" || reference >= 0) && (
+        <p className={cn("text-[12px] leading-relaxed", state === "pruned" ? "text-signal" : "text-ink-soft")}>
+          {state === "pruned"
+            ? STATUS_REASONS[status]
+            : state === "superseded"
+              ? trace.depthFirst ? "属于上一轮迭代的历史节点，新一轮已重新开始。" : "已被更低代价的同状态节点替代。"
               : status === "replaced" && state === "open"
-                ? "以更低代价替换了候选中的同一状态，等待取出。"
-                : STATE_SENTENCES[state](trace.depthFirst)}
+                ? "以更优代价替换了候选队列中的同状态节点，等待取出。"
+                : null}
           {reference >= 0 && (
             <>
-              {" "}同一状态：
+              {" "}相同状态：
               <button type="button" className="type-data font-semibold text-sea underline-offset-2 hover:underline" onClick={() => onInspect(reference)}>
                 #{reference}
               </button>
@@ -142,19 +132,37 @@ export const Inspector = memo(function Inspector({ record, scene, inspected, onI
           )}
           {replacedBy >= 0 && replacedBy < scene.revealedEnd && (
             <>
-              {" "}后来被
+              {" "}后续被节点
               <button type="button" className="type-data mx-0.5 font-semibold text-sea underline-offset-2 hover:underline" onClick={() => onInspect(replacedBy)}>
                 #{replacedBy}
               </button>
-              以更低代价替换。
+              以更优代价替换。
             </>
           )}
         </p>
-      </div>
+      )}
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] font-medium text-ink-soft">从起点走到这里（{g} 步）</span>
-        <div className="flex flex-wrap gap-1">
+      <details className="group border-t border-rule" open={calculationOpen} onToggle={(event) => setCalculationOpen(event.currentTarget.open)}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-3 text-[12px] font-medium text-ink-soft [&::-webkit-details-marker]:hidden">
+          {record.heuristic === "ZERO" ? "零估计" : "剩余估计"}
+          <ChevronDown className="size-3.5 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+        </summary>
+        <div className="flex flex-col gap-3 pb-3">
+          <HeuristicBreakdown record={record} board={board} terms={terms} h={h} />
+          {move && (
+            <p className="type-data text-[11px] leading-relaxed text-ink-soft">
+              g +1，h {dh > 0 ? `+${dh}` : dh === 0 ? "不变" : `−${-dh}`}，f {dh + 1 === 0 ? "不变" : dh + 1 > 0 ? `+${dh + 1}` : `−${-(dh + 1)}`}。
+            </p>
+          )}
+        </div>
+      </details>
+
+      <details className="group -mt-4 border-t border-rule" open>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-3 text-[12px] font-medium text-ink-soft [&::-webkit-details-marker]:hidden">
+          <span>到达此节点的移动路径 · {g} 步</span>
+          <ChevronDown className="size-3.5 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+        </summary>
+        <div className="flex flex-wrap gap-1 pb-3">
           {path.length === 1 ? (
             <span className="text-[12px] text-ink-soft">—</span>
           ) : (
@@ -178,29 +186,11 @@ export const Inspector = memo(function Inspector({ record, scene, inspected, onI
             })
           )}
         </div>
-      </div>
+      </details>
     </section>
   );
 });
 
-function Term({ label, symbol, value, tone, animated, delta = null }: { label: string; symbol: string; value: number; tone: string; animated: boolean; delta?: number | null }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2 rounded-lg border border-rule bg-surface px-2.5 py-1.5">
-      <span className="text-[11px] text-ink-soft">
-        <span className={cn("type-data mr-1 font-semibold", tone)}>{symbol}</span>
-        {label}
-      </span>
-      <span className={cn("type-data flex items-center gap-2 text-lg font-semibold", tone)}>
-        {delta !== null && delta !== 0 && (
-          <span className="rounded bg-muted px-1 py-px text-[10px] font-medium text-ink-soft" title="相对父节点的变化">
-            {delta > 0 ? `+${delta}` : `−${-delta}`}
-          </span>
-        )}
-        <NumberFlow value={value} animated={animated} />
-      </span>
-    </div>
-  );
-}
 
 /** IDA*: where this node's f sits against the iteration's threshold. */
 function BoundMeter({ f, bound, over }: { f: number; bound: number; over: boolean }) {
@@ -209,7 +199,7 @@ function BoundMeter({ f, bound, over }: { f: number; bound: number; over: boolea
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-[11px]">
         <span className="text-ink-soft">本次迭代界限 {bound}</span>
-        <span className={cn("font-semibold", over ? "text-signal" : "text-sea")}>{over ? `f = ${f} > ${bound}，超界` : `f = ${f} ≤ ${bound}，可以继续`}</span>
+        <span className={cn("font-semibold", over ? "text-signal" : "text-sea")}>{over ? `f = ${f} > ${bound} 超出界限` : `f = ${f} ≤ ${bound} 未超界限`}</span>
       </div>
       <div className="relative h-2 rounded-full bg-muted">
         <motion.div
@@ -226,12 +216,12 @@ function BoundMeter({ f, bound, over }: { f: number; bound: number; over: boolea
 
 function HeuristicBreakdown({ record, board, terms, h }: { record: LoadedRecord; board: ArrayLike<number>; terms: number[] | null; h: number }) {
   if (record.heuristic === "ZERO") {
-    return <p className="rounded-lg bg-muted px-3 py-2 text-[12px] text-ink-soft">零启发函数对所有棋盘都返回 0，因此 h 恒为 0。</p>;
+    return <p className="text-[12px] leading-relaxed text-ink-soft">零启发函数恒返回 0，搜索过程退化为 Dijkstra 算法。</p>;
   }
   if (!terms) {
     return (
-      <p className="rounded-lg bg-magenta-wash px-3 py-2 text-[12px] text-ink">
-        <b className="font-semibold text-magenta">h = {h}</b>：模式数据库把棋子分组，各组到目标的最少步数查表后相加，不能拆成单个棋子的贡献。
+      <p className="text-[12px] leading-relaxed text-ink-soft">
+        <b className="font-semibold text-magenta">h = {h}</b>：模式数据库按子问题分组查表计算，属于整体组合估值，不支持单个棋子独立分解。
       </p>
     );
   }
@@ -240,19 +230,19 @@ function HeuristicBreakdown({ record, board, terms, h }: { record: LoadedRecord;
     .sort((a, b) => a.tile - b.tile);
   const manhattan = record.heuristic === "MANHATTAN";
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg bg-magenta-wash/70 px-3 py-2">
+    <div className="flex flex-col gap-2">
       <span className="text-[11px] text-ink-soft">
-        {manhattan ? "h = 每个棋子到目标位置的横纵距离之和（棋子角标）" : "h = 不在目标位置的棋子数（角标为 1 的棋子）"}
+        {manhattan ? "h 为各棋子到达目标网格的曼哈顿距离总和，角标为单棋子距离" : "h 为未在目标位置的错位棋子数，角标为 1 即代表未就位"}
       </span>
       <div className="type-data flex flex-wrap items-center gap-x-1 gap-y-1 text-[12px] text-ink">
         {parts.length === 0 ? (
-          <span>全部就位，h = 0</span>
+          <span>所有棋子已就位，h = 0</span>
         ) : (
           <>
             {parts.map((part, index) => (
               <span key={part.tile} className="flex items-center gap-1">
                 {index > 0 && <span className="text-ink-soft">+</span>}
-                <span className="rounded bg-surface px-1 py-px">
+                <span className="rounded bg-muted px-1 py-px">
                   {part.tile}
                   {manhattan && <sub className="ml-px text-magenta">{part.value}</sub>}
                 </span>

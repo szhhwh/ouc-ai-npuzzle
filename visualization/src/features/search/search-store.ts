@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { registerPauser } from "@/app/ui-store";
 import type { Phase } from "@/replay/model";
 
-export const SPEEDS = [0.5, 1, 2, 4, 16, 64, 256, 1024] as const;
+export const SPEEDS = [0.5, 1, 2, 4] as const;
 export type Speed = (typeof SPEEDS)[number];
 
 /** Narration time per shot at 1×. A round with three successors takes about 3.3 s. */

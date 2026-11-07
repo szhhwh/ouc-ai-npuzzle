@@ -41,7 +41,7 @@ function Shell() {
     noClick: true,
     noKeyboard: true,
     onDrop: (accepted, rejected) => {
-      if (rejected.length) toast.error(`只能导入 JSON 文件，已跳过 ${rejected.length} 个文件。`);
+      if (rejected.length) toast.error(`仅支持导入 JSON 格式文件，已跳过 ${rejected.length} 个不支持的文件。`);
       if (accepted.length) importFiles(accepted).catch(() => {});
     },
   });
@@ -66,7 +66,7 @@ function Shell() {
   if (!current) {
     body =
       phase === "starting" || loadingId ? (
-        <LoadingState key="loading" label={loadingName ? `正在解压并校验“${loadingName}”…` : "正在读取本地问题库…"} />
+        <LoadingState key="loading" label={loadingName ? `正在加载“${loadingName}”…` : "正在加载历史记录…"} />
       ) : (
         <EmptyState key="empty" failure={failure} />
       );
@@ -99,7 +99,7 @@ function Shell() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               role="status"
-              aria-label={`正在载入“${loadingName ?? ""}”`}
+              aria-label={`正在加载“${loadingName ?? ""}”`}
             >
               <motion.div
                 className="h-full w-1/3 bg-sea"

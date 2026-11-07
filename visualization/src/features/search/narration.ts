@@ -24,10 +24,10 @@ export function narrate(record: LoadedRecord, scene: Scene, frontier: Frontier |
     case "ready":
       return {
         tag: "准备",
-        title: depthFirst ? `从起点开始，界限 = h(起点) = ${trace.h[0]}` : "起点加入候选队列",
+        title: depthFirst ? `从起点开始搜索，初始界限 h = ${trace.h[0]}` : "起点加入候选队列",
         body: dijkstra
-          ? `Dijkstra 按已走步数 g 排序：起点 g = 0，h = ${trace.h[0]}。h 仍按所选启发函数记录，不参与候选队列排序。`
-          : `f = g + h：g 是已走步数，h 是到目标的估计。起点 g = 0，h = ${trace.h[0]}，所以 f = ${trace.h[0]}。`,
+          ? `起点已走步数 g = 0，启发估计剩余 ${trace.h[0]} 步。`
+          : `起点已走步数 g = 0，启发估计剩余 ${trace.h[0]} 步，综合代价 f = ${trace.h[0]}。`,
       };
     case "pick": {
       if (depthFirst) {
@@ -35,23 +35,23 @@ export function narrate(record: LoadedRecord, scene: Scene, frontier: Frontier |
         if (root && scene.iteration > 0) {
           return {
             tag: roundTag,
-            title: `界限提高到 ${scene.bound}，从起点重新搜索`,
-            body: `上一次迭代中超出界限的最小 f 是 ${scene.bound}。以它为新界限，丢弃旧的搜索树，从起点重新深度优先展开。`,
+            title: `界限提升至 ${scene.bound}，从起点重新搜索`,
+            body: `上一轮迭代中超出界限的最小估值为 ${scene.bound}。以此作为新界限，重置搜索树并从起点重新深度优先展开。`,
           };
         }
         return {
           tag: roundTag,
-          title: `深度优先访问 #${id}`,
-          body: `#${id} 的 f = ${f(record, id)}，不超过本轮界限 ${scene.bound}，继续向下生成它的后继。`,
+          title: `深度优先访问节点 #${id}`,
+          body: `节点 #${id} 的估值 f = ${f(record, id)}，未超过当前界限 ${scene.bound}，继续向下展开后继状态。`,
         };
       }
-      const ties = frontier && frontier.ties > 1 ? `有 ${frontier.ties} 个候选的 ${dijkstra ? "g 相同" : "f 和 g 都相同"}，由 Java 优先队列决定先取哪一个。` : "";
+      const ties = frontier && frontier.ties > 1 ? `存在 ${frontier.ties} 个候选节点的 ${dijkstra ? "g 相同" : "f 与 g 均相同"}，按队列既定规则取出。` : "";
       return {
         tag: roundTag,
         title: `取出${dijkstra ? " g" : " f"} 最小的节点 #${id}`,
         body: dijkstra
-          ? `候选队列按 g 升序排列，#${id} 的 g = ${trace.g[id]}。${ties}`
-          : `候选队列按 f 升序、f 相同再按 g 升序排列。#${id} 的 f = ${f(record, id)}，g = ${trace.g[id]}。${ties}`,
+          ? `候选队列按步数 g 升序排列，节点 #${id} 的 g = ${trace.g[id]}。${ties}`
+          : `候选队列按估值 f 优先、f 相同时按 g 升序排列。节点 #${id} 的 f = ${f(record, id)}，g = ${trace.g[id]}。${ties}`,
       };
     }
     case "child": {
@@ -59,17 +59,19 @@ export function narrate(record: LoadedRecord, scene: Scene, frontier: Frontier |
       const move = moveBetween(boardOf(trace, id), boardOf(trace, child), trace.size);
       const status = STATUSES[trace.status[child]];
       const ref = trace.reference[child];
-      const sum = dijkstra
-        ? `g = ${trace.g[child]}，h = ${trace.h[child]}（估值 f = ${f(record, child)}，按 g 排序）`
-        : `f = ${trace.g[child]} + ${trace.h[child]} = ${f(record, child)}`;
+      const childF = f(record, child);
       const verdicts: Record<typeof status, string> = {
-        frontier: depthFirst ? `${sum}，不超过界限 ${scene.bound}，稍后深入访问。` : `${sum}，加入候选队列。`,
-        replaced: `${sum}；候选中的同一状态 #${ref} 代价更高（g = ${trace.g[ref]}），用新节点替换它。`,
-        "closed-pruned": `这个状态已在 #${ref} 扩展过，重复出现直接剪枝。`,
-        "frontier-pruned": `候选中已有同一状态 #${ref}，且 g = ${trace.g[ref]} 不更差，剪枝。`,
-        "cycle-pruned": "这一步回到当前路径上已有的状态（包括立即退回），剪枝。",
-        "bound-pruned": `${sum}，超过界限 ${scene.bound}，剪枝；它的 f 会参与决定下一轮界限。`,
-        "transposition-pruned": "置换表记录过以更少步数到达这个状态，剪枝。",
+        frontier: depthFirst
+          ? `综合代价 f = ${childF}，未超界限 ${scene.bound}，保留待深入访问。`
+          : dijkstra
+            ? `已走步数 g = ${trace.g[child]}，加入候选队列。`
+            : `综合代价 f = ${childF}，加入候选队列。`,
+        replaced: `候选队列中已有同状态节点 #${ref}，当前路径代价更优，其 g = ${trace.g[child]}，更新替换。`,
+        "closed-pruned": `该状态已在节点 #${ref} 扩展过，判定为重复状态并剪枝。`,
+        "frontier-pruned": `候选队列中已存在相同状态 #${ref} 且代价不劣，其 g = ${trace.g[ref]}，执行剪枝。`,
+        "cycle-pruned": "移动回退至当前搜索路径已有状态，检测到回路，执行剪枝。",
+        "bound-pruned": `综合代价 f = ${childF} 超出界限 ${scene.bound}，执行剪枝；其 f 值将参与决定下一轮迭代界限。`,
+        "transposition-pruned": "置换表记录已有更优步数到达该状态，执行剪枝。",
       };
       return {
         tag: `${roundTag} · 后继 ${scene.child + 1} / ${scene.childEnd - scene.childStart}`,
@@ -82,7 +84,7 @@ export function narrate(record: LoadedRecord, scene: Scene, frontier: Frontier |
       for (let child = scene.childStart; child < scene.childEnd; child++) if (trace.status[child] >= 2) pruned++;
       const kept = scene.childEnd - scene.childStart - pruned;
       const nextIsRoot = scene.next >= 0 && trace.parent[scene.next] < 0;
-      const next = scene.next < 0 ? "" : nextIsRoot ? "本次迭代没有找到目标，下一轮将提高界限。" : `下一个${depthFirst ? "访问" : "取出"} #${scene.next}（${dijkstra ? `g = ${trace.g[scene.next]}` : `f = ${f(record, scene.next)}`}）。`;
+      const next = scene.next < 0 ? "" : nextIsRoot ? "本轮迭代未找到目标，下一轮将提高界限继续搜索。" : `下一个${depthFirst ? "访问" : "取出"}节点 #${scene.next}，${dijkstra ? `g = ${trace.g[scene.next]}` : `f = ${f(record, scene.next)}`}。`;
       return {
         tag: roundTag,
         title: `本轮保留 ${kept} 个，剪枝 ${pruned} 个`,
@@ -94,8 +96,8 @@ export function narrate(record: LoadedRecord, scene: Scene, frontier: Frontier |
     case "goal":
       return {
         tag: "完成",
-        title: `取出的 #${id} 就是目标：最优解 ${trace.g[id]} 步`,
-        body: `黄铜色路线是完整解路径。共扩展 ${formatInt(record.expanded)} 个节点，生成 ${formatInt(record.generated)} 个。`,
+        title: `节点 #${id} 到达目标状态：最优解共 ${trace.g[id]} 步`,
+        body: `高亮路线为完整解路径。累计扩展 ${formatInt(record.expanded)} 个节点，生成 ${formatInt(record.generated)} 个节点。`,
       };
   }
 }

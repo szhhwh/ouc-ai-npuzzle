@@ -41,11 +41,11 @@ export function legalMove(before: ArrayLike<number>, after: ArrayLike<number>, s
 /** Checks the supplied search history against the board rules; it never searches for a solution. */
 export function validateRecord(input: unknown): RawRecord & { name: string } {
   const record = input as RawRecord;
-  requireValue(record && typeof record === "object" && !Array.isArray(record), "问题记录必须是对象。");
+  requireValue(record && typeof record === "object" && !Array.isArray(record), "记录数据必须是对象。");
   requireValue(algorithms.has(record.algorithm), "不支持的算法名称。");
   requireValue(heuristics.has(record.heuristic), "不支持的启发函数名称。");
-  requireValue(record.name == null || typeof record.name === "string", "问题名称必须是文字。");
-  requireValue(Array.isArray(record.states) && record.states.length > 0, "记录缺少完整解路径。");
+  requireValue(record.name == null || typeof record.name === "string", "记录名称必须是字符串。");
+  requireValue(Array.isArray(record.states) && record.states.length > 0, "记录缺少完整解路径数据。");
   const length = record.states[0]?.length;
   requireValue(length === 9 || length === 16, "只支持 3×3 或 4×4 棋盘。");
   const size = Math.sqrt(length);
@@ -60,7 +60,7 @@ export function validateRecord(input: unknown): RawRecord & { name: string } {
   const trace = record.trace;
   requireValue(
     trace && trace.complete === true && Array.isArray(trace.nodes) && trace.nodes.length > 0 && Array.isArray(trace.frames) && trace.frames.length > 0 && Array.isArray(trace.solution),
-    "记录必须包含 complete=true 的完整搜索过程。请重新使用 Java 导出。",
+    "记录缺少完整搜索树数据，请提供包含完整搜索过程的记录文件。",
   );
   const { nodes, frames, solution } = trace;
   const roots: number[] = [];
@@ -84,7 +84,7 @@ export function validateRecord(input: unknown): RawRecord & { name: string } {
   });
   requireValue(roots[0] === 0 && record.generated === nodes.length - roots.length, "生成节点计数与完整搜索过程不一致。");
   const depthFirst = record.algorithm === "IDA*" || record.algorithm === "NIDA*";
-  requireValue(depthFirst || roots.length === 1, "该算法不能包含多个搜索根节点。");
+  requireValue(depthFirst || roots.length === 1, "当前算法应只包含单个初始根节点。");
   requireValue(record.expanded === frames.length - 1, "扩展节点计数与完整搜索过程不一致。");
   const generated = new Uint8Array(nodes.length);
   const visited = new Uint8Array(nodes.length);

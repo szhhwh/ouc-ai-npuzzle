@@ -1,4 +1,5 @@
 import NumberFlow from "@number-flow/react";
+import { ChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { memo } from "react";
 import type { LoadedRecord } from "@/data/types";
@@ -22,7 +23,6 @@ export const FrontierPanel = memo(function FrontierPanel(props: FrontierPanelPro
 
 function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: FrontierPanelProps) {
   const dijkstra = record.algorithm === "Dijkstra";
-  const maxPriority = Math.max(1, ...frontier.top.map((entry) => entry.priority));
   const histogram = frontier.histogram.slice(0, 14);
   const maxCount = Math.max(1, ...histogram.map((bin) => bin.count));
   const headLabel = scene.phase === "merge" || scene.phase === "ready" ? "下一个取出" : "队首";
@@ -31,18 +31,18 @@ function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: Fro
       type="button"
       onClick={() => onInspect(entry.id)}
       className={cn(
-        "grid w-full grid-cols-[2.6rem_minmax(0,1fr)_2.8rem] items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors",
+        "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-lg px-2.5 py-2.5 text-left transition-colors",
         rank === 0 ? "bg-sea-wash" : "hover:bg-muted",
         inspected === entry.id && "ring-2 ring-ink",
       )}
     >
       <span className="type-data text-[11px] text-ink-soft">#{entry.id}</span>
-      <span className="flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
-        <span className="bg-ink" style={{ width: `${(entry.g / maxPriority) * 100}%` }} />
-        {!dijkstra && <span className="bg-magenta" style={{ width: `${((entry.f - entry.g) / maxPriority) * 100}%` }} />}
+      <span className="type-data flex items-baseline gap-3 text-[12px]">
+        <span className={cn(dijkstra ? "font-semibold text-ink" : "text-ink-soft")}><span className="mr-1 text-[10px]">g</span>{entry.g}</span>
+        {!dijkstra && <span className="text-magenta"><span className="mr-1 text-[10px]">h</span>{entry.f - entry.g}</span>}
+        {!dijkstra && <span className="font-semibold text-ink"><span className="mr-1 text-[10px]">f</span>{entry.f}</span>}
       </span>
-      <span className="type-data text-right text-[12px] font-semibold text-ink">{dijkstra ? `g ${entry.g}` : `f ${entry.f}`}</span>
-      {rank === 0 && <span className="col-span-3 -mt-0.5 text-[10px] font-semibold text-sea">{headLabel}</span>}
+      {rank === 0 && <span className="col-span-2 text-[10px] font-semibold text-sea">{headLabel}</span>}
     </button>
   );
   return (
@@ -53,10 +53,11 @@ function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: Fro
           <NumberFlow value={frontier.size} animated={!fast} /> 个
         </span>
       </header>
-      <p className="-mt-1 text-[11px] leading-relaxed text-ink-soft">
-        {dijkstra ? "按 g 升序排列，最小者先取出。" : "按 f 升序、f 相同再按 g 升序，最小者先取出。"}
-        {frontier.ties > 1 && `队首有 ${frontier.ties} 个并列，由 Java 优先队列决定。`}
-      </p>
+      {frontier.ties > 1 && (
+        <p className="-mt-1 text-[11px] leading-relaxed text-ink-soft">
+          队首存在 {frontier.ties} 个代价值并列的候选节点。
+        </p>
+      )}
       <ol className="flex flex-col gap-1">
         {fast ? (
           frontier.top.map((entry, rank) => <li key={entry.id}>{renderRow(entry, rank)}</li>)
@@ -81,8 +82,11 @@ function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: Fro
         <span className="text-[11px] text-ink-soft">另有 {(frontier.size - frontier.top.length).toLocaleString("zh-CN")} 个候选</span>
       )}
       {histogram.length > 1 && (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] text-ink-soft">{dijkstra ? "候选按 g 分布" : "候选按 f 分布"}</span>
+        <details className="group border-t border-rule" open>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 py-3 text-[11px] text-ink-soft [&::-webkit-details-marker]:hidden">
+            {dijkstra ? "候选按 g 分布" : "候选按 f 分布"}
+            <ChevronDown className="size-3.5 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+          </summary>
           <div className="flex h-12 items-end gap-1" role="img" aria-label={histogram.map((bin) => `${dijkstra ? "g" : "f"} ${bin.value}：${bin.count} 个`).join("，")}>
             {histogram.map((bin, index) => (
               <div key={bin.value} className="flex min-w-0 flex-1 flex-col items-center gap-0.5">
@@ -96,7 +100,7 @@ function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: Fro
               </div>
             ))}
           </div>
-        </div>
+        </details>
       )}
     </section>
   );
@@ -119,9 +123,9 @@ function IterationPanel({ record, scene, frontier, onInspect, onJumpIteration, f
         </span>
       </header>
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-lg bg-ink px-3 py-2 text-primary-foreground">
-          <span className="block text-[11px] opacity-75">本次界限</span>
-          <span className="type-display text-2xl font-bold">
+        <div className="rounded-lg border border-rule px-3 py-2 text-ink">
+          <span className="block text-[11px] text-ink-soft">本次界限</span>
+          <span className="type-data text-xl font-semibold">
             <NumberFlow value={scene.bound} animated={!fast} />
           </span>
         </div>
@@ -132,12 +136,9 @@ function IterationPanel({ record, scene, frontier, onInspect, onJumpIteration, f
           className="rounded-lg border border-dashed border-signal/50 px-3 py-2 text-left transition-colors enabled:hover:bg-signal-wash"
         >
           <span className="block text-[11px] text-ink-soft">超界的最小 f</span>
-          <span className="type-display text-2xl font-bold text-signal">{next ? next.f : "—"}</span>
+          <span className="type-data text-xl font-semibold text-signal">{next ? next.f : "—"}</span>
         </button>
       </div>
-      <p className="-mt-1 text-[11px] leading-relaxed text-ink-soft">
-        f 超过界限的后继被剪掉；若本次迭代没找到目标，超界的最小 f 就是下一次的界限。
-      </p>
       <ol className="flex flex-col gap-1">
         {iterations.map((item) => {
           const state = item.iteration < scene.iteration ? "done" : item.iteration === scene.iteration ? "active" : "todo";

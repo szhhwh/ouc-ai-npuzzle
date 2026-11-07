@@ -29,7 +29,7 @@ const api = {
     let first: RecordDetails | undefined;
     for (const [fileIndex, file] of files.entries()) {
       const label = file.name || "文件";
-      progress(`正在读取 ${label}（${fileIndex + 1} / ${files.length}）`);
+      progress(`正在读取 ${label} · ${fileIndex + 1} / ${files.length}`);
       let artifact: { schemaVersion?: unknown; results?: unknown[] };
       try {
         artifact = JSON.parse(await file.text());
@@ -38,10 +38,10 @@ const api = {
       }
       requireValue(
         artifact?.schemaVersion === 2 && Array.isArray(artifact.results) && artifact.results.length > 0,
-        `${label} 必须是包含完整 results 的 schemaVersion: 2 Java 导出文件。`,
+        `${label} 格式不符合要求，请提供包含完整搜索记录的 JSON 文件。`,
       );
       for (const [index, raw] of artifact.results.entries()) {
-        progress(`正在校验 ${label} 的第 ${index + 1} / ${artifact.results.length} 条记录`);
+        progress(`正在解析 ${label} 的第 ${index + 1} / ${artifact.results.length} 条记录`);
         let record;
         try {
           record = validateRecord(raw);
@@ -75,7 +75,7 @@ const api = {
     try {
       details = compactRecord(validateRecord(JSON.parse(await gunzip(blob))));
     } catch (error) {
-      throw new Error(`无法解压或读取“${meta.name}”：${(error as Error).message}`);
+      throw new Error(`无法加载“${meta.name}”：${(error as Error).message}`);
     }
     requireValue(
       meta.size === details.size &&
@@ -86,7 +86,7 @@ const api = {
         meta.expanded === details.expanded &&
         meta.timeMs === details.timeMs &&
         meta.compressedBytes === blob.size,
-      `“${meta.name}”的本地元数据与压缩记录不一致。`,
+      `“${meta.name}”的数据校验未通过。`,
     );
     return Comlink.transfer(details, traceBuffers(details.trace));
   },

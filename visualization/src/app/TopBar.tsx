@@ -91,9 +91,9 @@ export function TopBar() {
             </span>
           )}
           <span className="flex min-w-0 flex-col leading-tight">
-            <span className="max-w-[9rem] truncate text-[13px] font-semibold text-ink sm:max-w-[14rem]">{current?.name ?? "问题记录"}</span>
+            <span className="max-w-[9rem] truncate text-[13px] font-semibold text-ink sm:max-w-[14rem]">{current?.name ?? "选择记录"}</span>
             <span className="hidden max-w-[14rem] truncate text-[11px] text-ink-soft sm:block">
-              {current ? `${current.algorithm} · ${HEURISTIC_NAMES[current.heuristic]} · ${current.states.length - 1} 步` : "导入与选择"}
+              {current ? `${current.algorithm} · ${HEURISTIC_NAMES[current.heuristic]} · ${current.states.length - 1} 步` : "选择或导入记录"}
             </span>
           </span>
           <span className="type-data flex items-center gap-1 rounded-md bg-paper px-1.5 py-0.5 text-[11px] text-ink-soft">
@@ -108,7 +108,7 @@ export function TopBar() {
               <span className="hidden md:inline">导入</span>
             </Button>
           </TooltipTrigger>
-          <TooltipContent>导入 Java 导出的 JSON，也可以直接拖到页面上</TooltipContent>
+          <TooltipContent>导入搜索记录 JSON，支持拖拽文件到页面</TooltipContent>
         </Tooltip>
       </div>
     </motion.header>
