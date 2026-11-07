@@ -15,10 +15,6 @@ public final class PqFrontier implements Frontier {
     private final PriorityQueue<Node> queue;
     private final Map<State, Node> bestNodeByState = new HashMap<>();
 
-    public PqFrontier() {
-        this(Comparator.naturalOrder());
-    }
-
     public PqFrontier(Comparator<Node> evaluator) {
         this.evaluator = Objects.requireNonNull(evaluator, "evaluator must not be null");
         this.queue = new PriorityQueue<>(evaluator);

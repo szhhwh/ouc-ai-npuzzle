@@ -172,16 +172,7 @@ public final class DisjointPdbHeuristic {
             return new Tables(size, groups, ts, goal.cells().clone());
         }
 
-        /** 直接查询，把各组的表值相加 */
-        int h(PuzzleBoard state) {
-            return hCells(state.cells(), state.blank());
-        }
-
         /** 对称增强查询，取直接查表和与对称态查表中的较大值；不满足对称条件时退化为直接查询 */
-        int hMax(PuzzleBoard state) {
-            return hMax(state, true);
-        }
-
         int hMax(PuzzleBoard state, boolean useSymmetry) {
             long positions = state.positions();
             int direct = hPositions(positions, state.blank(), false);
@@ -200,34 +191,6 @@ public final class DisjointPdbHeuristic {
                     index = index * cells + (mirrored ? transpose[p] : p);
                 }
                 sum += tables[g][index * cells + blank] & 255;
-            }
-            return sum;
-        }
-
-        /**
-         * 把各组投影的表值相加。
-         *
-         * @param c 盘面数组
-         * @param blank 空格位置
-         * @return 各组表值之和
-         */
-        private int hCells(byte[] c, int blank) {
-            // 一次扫描建 pos[v]，即数字 v 的当前位置，供各组复用
-            int[] pos = new int[cells];
-            for (int i = 0; i < cells; i++) {
-                pos[c[i]] = i;
-            }
-
-            int sum = 0;
-            for (int g = 0; g < groups.length; g++) {
-                int[] tiles = groups[g];
-                // 用 Horner 法算乘积进制下标，最高位是 tiles[0] 的位置，最低位是空格位置
-                int idx = pos[tiles[0]];
-                for (int j = 1; j < tiles.length; j++) {
-                    idx = idx * cells + pos[tiles[j]];
-                }
-                idx = idx * cells + blank;
-                sum += tables[g][idx] & 0xFF;
             }
             return sum;
         }

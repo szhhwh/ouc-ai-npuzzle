@@ -9,10 +9,6 @@ final class ProductPdbContext extends PdbContext {
     private final int[] idx, idxSym, values, symmetricValues;
     private final boolean incremental;
 
-    ProductPdbContext(PuzzleBoard initial, DisjointPdbHeuristic.Tables tables) {
-        this(initial, tables, PdbOptions.fromSystemProperties());
-    }
-
     ProductPdbContext(PuzzleBoard initial, DisjointPdbHeuristic.Tables tables, PdbOptions options) {
         super(initial, tables.goalCells);
         tbl = tables;

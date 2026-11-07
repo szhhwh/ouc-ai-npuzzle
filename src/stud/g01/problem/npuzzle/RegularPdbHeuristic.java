@@ -52,10 +52,6 @@ final class RegularPdbHeuristic {
             }
         }
 
-        int hMax(PuzzleBoard state) {
-            return hMax(state, true);
-        }
-
         int hMax(PuzzleBoard state, boolean useSymmetry) {
             long positions = state.positions();
             int direct = h(positions, state.blank());

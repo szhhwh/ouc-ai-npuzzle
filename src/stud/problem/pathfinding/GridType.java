@@ -21,10 +21,6 @@ public enum GridType {
         return magnify;
     }
 
-    public GridType valueOfDigit(char digit) {
-        return values()[digit - '0'];
-    }
-
     @Override
     public String toString() {
         return symbol + "";

@@ -9,10 +9,6 @@ import java.util.Deque;
 /** N-Puzzle 数字华容道问题 */
 public class NPuzzleProblem extends Problem {
 
-    public NPuzzleProblem(State initialState, State goal) {
-        super(initialState, goal);
-    }
-
     public NPuzzleProblem(State initialState, State goal, int size) {
         super(initialState, goal, size);
     }

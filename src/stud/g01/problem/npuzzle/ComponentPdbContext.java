@@ -62,10 +62,6 @@ final class ComponentPdbContext extends PdbContext {
     private final int[] fullPositions;
     private final int[][] fullTuples;
 
-    ComponentPdbContext(PuzzleBoard initial, Tables tables) {
-        this(initial, tables, PdbOptions.fromSystemProperties());
-    }
-
     ComponentPdbContext(PuzzleBoard initial, Tables tables, PdbOptions options) {
         super(initial, tables.goal.cells());
         this.tables = tables;

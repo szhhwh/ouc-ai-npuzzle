@@ -12,10 +12,6 @@ public class PathFinding extends Problem {
     // 地图
     GridType[][] grids;
 
-    public PathFinding(State initialState, State goal) {
-        this(initialState, goal, 0);
-    }
-
     public PathFinding(State initialState, State goal, int size) {
         super(initialState, goal, size);
         grids = new GridType[size][size];
