@@ -1,199 +1,237 @@
+# OUC AI N-Puzzle Solver & Visualizer
 
-# N-Puzzle 可视化
+<p align="center">
+  <strong>高性能 N-Puzzle（8 数码 / 15 数码）启发式求解器与全流程交互式搜索过程可视化系统</strong>
+</p>
 
-`visualization/` 是 React 单页应用，读取 Java 导出的 JSON，提供「解路径回放」与「搜索过程」两个视图。同一条记录同时驱动两个视图，包含完整解路径、生成节点、访问顺序与剪枝记录。首次打开显示导入引导；把 JSON 拖到页面任意位置，或点击顶部「导入」即可导入，可一次导入多个文件。
+<p align="center">
+  <a href="https://szhhwh.github.io/ouc-ai-npuzzle/"><img src="https://img.shields.io/badge/Live_Demo-在线体验-2ea44f?style=for-the-badge&logo=githubpages&logoColor=white" alt="Live Demo"></a>
+</p>
 
-- **问题记录**：顶部记录按钮打开记录表，显示初始棋盘、名称、算法、启发函数、路径长度、扩展/生成数、耗时、压缩大小与导入时间。支持排序、直接改名（留空时为 `Untitled Problem`）、载入、单条删除和多选批量删除，删除前确认。
-- **解路径回放**：棋子按每一步滑动，显示移动的棋子与方向；右侧是指标、逐步移动列表，以及解路径上启发值 h 与实际剩余步数的对比图。可在棋子角标上显示每块棋子对 h 的贡献。
-- **搜索过程**：搜索树绘制在可拖动、缩放的画布上。每轮拆成「取出 → 逐个生成后继 → 合并」几个镜头：取出后先为全部后继留出虚线位置，后继从父节点展开并逐个标出保留或剪枝原因，布局变化和镜头移动都连续过渡。叙述卡解释当前一步；计算面板展示所选节点的棋盘、g + h = f、h 的逐块来源、相对父节点的变化与剪枝原因；A* / Dijkstra 显示候选队列与 f 分布，IDA* / NIDA* 显示界限、超界的最小 f 与迭代列表。另有缩略图、镜头跟随、显示剪枝节点和全屏模式。
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-25%2B-ED8B00?style=flat-square&logo=openjdk&logoColor=white" alt="Java 25">
+  <img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19">
+  <img src="https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 6">
+  <img src="https://img.shields.io/badge/Bun-Ready-000000?style=flat-square&logo=bun&logoColor=white" alt="Bun">
+  <img src="https://img.shields.io/badge/TailwindCSS-v4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white" alt="TailwindCSS v4">
+  <img src="https://img.shields.io/badge/Code_Style-Spotless_Google_AOSP-00599C?style=flat-square" alt="Spotless">
+  <img src="https://img.shields.io/badge/Static_Analysis-SpotBugs-E05D44?style=flat-square" alt="SpotBugs">
+</p>
 
-播放速度从 0.5× 到 1024×，高倍速时树仍逐帧更新，面板改为定时刷新。切换视图、打开记录表或页面隐藏时暂停播放；两个视图各自保留进度，只有切换记录才重置。
+---
 
-| 按键 | 解路径回放 | 搜索过程 |
-| --- | --- | --- |
-| `1` / `2` | 切换视图 | 切换视图 |
-| `Space` | 播放 / 暂停 | 播放 / 暂停 |
-| `←` / `→` | 上一步 / 下一步 | 上一步 / 下一步 |
-| `Shift` + `←` / `→` | — | 上一轮 / 下一轮 |
-| `Home` / `End` | 起点 / 终点 | 起点 / 目标 |
-| `F` / `Esc` | — | 进入 / 退出全屏 |
-| `P` / `C` / `0` | — | 剪枝节点 / 镜头跟随 / 显示整棵树 |
+## 📖 项目简介
 
-搜索过程来自实际 Java 搜索，不截断，也不在浏览器重新求解。A* / Dijkstra 保留真实优先队列的选择；f、g 并列时队首显示 Java 实际取出的节点。IDA* / NIDA* 保留每次迭代、界限与实际深度优先访问。重复状态保留独立节点，目标真正取出后才显示最终解路径。镜头节奏只用于回放，不代表运行耗时。
+本项目为中国海洋大学（OUC）人工智能课程 N-Puzzle 高效求解系统，采用双模块架构：
 
-完整记录通过 gzip 压缩后写入浏览器的 IndexedDB（库名 `npuzzle-library`，与旧版页面兼容），刷新后恢复当前记录。记录仅保存在当前浏览器与站点中，清除站点数据会同时清除记录。导入、校验和解压在 Web Worker 中进行。
+1. **高性能后端求解器（Java 25）**：支持 A*、IDA*、Dijkstra 及专用 NIDA* 算法，融合 64 位逆映射位棋盘、可加模式数据库（Disjoint PDB）、增量查表与主对角线对称剪枝等深度优化。
+2. **交互式全流程可视化前端（React 19 + Vite）**：纯前端单页架构，提供「解路径回放」与「搜索树推演」双视角，支持平滑镜头追踪、节点计算公式透视与大规模回放记录的客户端持久化。
 
-问题记录表只渲染可见行及少量缓冲行，避免打开时为整个问题库挂载控件和执行逐行布局动画。排序与「选择全部」仍作用于全部记录。
+> 🌐 **在线演示体验**：无需安装本地环境，直接访问 [GitHub Pages 在线可视化系统](https://szhhwh.github.io/ouc-ai-npuzzle/) 即可体验预置样例与拖拽导入回放。
 
-## 开发与构建
+---
 
-需要 [Bun](https://bun.sh)。在 `visualization/` 下：
+## ✨ 核心特性
+
+### ⚡ 核心求解算法与工程优化
+- **全算法矩阵覆盖**：原生集成 A*、IDA*、Dijkstra 引擎，并提供针对 N-Puzzle 深度优化的专用引擎 `nida`。
+- **阶梯式启发函数（Admissible Heuristics）**：
+  - `ZERO`：零估计（退化为一致代价搜索 / Dijkstra）
+  - `MISPLACED`：不在位将牌数启发式
+  - `MANHATTAN`：基于预计算距离表的常数级曼哈顿距离
+  - `DISJOINT_PATTERN`：可加模式数据库（PDB），支持 8 数码（3-3-2 分组）与 15 数码（6-6-3 排名编码 / 7-8 连通分量编码）
+- **高阶剪枝与底层加速**：
+  - **64 位逆映射位棋盘**：单 `long` 整数紧凑编码盘面各数值的位置，状态判等为单条 CPU 指令，滑动转移仅需位异或。
+  - **增量式 PDB 查表**：避免全盘重新编码，仅计算滑动棋子引起的模式位移差值。
+  - **主对角线对称增强**：在对角线目标下利用 $\max(h_{\text{direct}}, h_{\text{mirrored}})$ 无损大幅削减搜索展开节点。
+  - **延时清理优先队列**：Open 表基于二叉堆与哈希表结合，实现 $\mathcal{O}(1)$ 状态查重与去重。
+
+### 🎨 现代化交互式搜索可视化
+- **解路径回放视图（Path Replay）**：
+  - 平滑滑块移动与方向指示。
+  - 解路径启发值 $h$ 与真实剩余步数趋势对比图。
+  - 棋子角标动态展示各数字对 $h$ 的实际贡献度。
+- **搜索空间树推演视图（Search Tree Explorer）**：
+  - 基于 D3.js + HTML5 Canvas 的高帧率树状拓扑推演（支持缩放、平移、全屏与鹰眼缩略图）。
+  - 分镜式动画演绎：节点出队、后继生成展开、剪枝状态标注（超界 / 重复 / 成环）。
+  - 节点计算面板：$f = g + h$ 实时演算公式、棋盘推演差分、候选队列分布。
+  - 0.5× 至 1024× 变速播放与智能相机平滑跟随。
+- **客户端高性能存储（Problem Library）**：
+  - 基于 IndexedDB 与 Web Worker 后台并行 gzip 解压，大规模搜索过程瞬时加载，刷新后状态持久化保留。
+  - 导出单文件静态分发（支持离线直接双击打开）。
+
+---
+
+## 🚀 快速上手
+
+### 1. 运行 Java 求解器
+
+#### 环境要求
+- **JDK 25+**（推荐 Temurin 25）
+- Maven 3.9+（项目内置 `./mvnw`）
+
+#### 编译与运行
+使用内置脚本一键编译并求解样例：
 
 ```bash
+# 语法：./scripts/run.sh <问题文件> <搜索引擎> [启发函数列表]
+./scripts/run.sh resources/problems-stage1.txt astar MANHATTAN
+```
+
+**常用运行命令示例**：
+```bash
+# 1. 使用 A* 搭配曼哈顿距离求解三阶样例
+./scripts/run.sh resources/problems-stage1.txt astar MANHATTAN
+
+# 2. 对比多种启发函数（以逗号分隔）
+./scripts/run.sh resources/problems-stage1.txt astar MISPLACED,MANHATTAN
+
+# 3. 使用专用 NIDA* 引擎配合模式数据库求解四阶高难度样例
+./scripts/run.sh resources/problems-stage3.txt nida DISJOINT_PATTERN
+```
+
+也可以直接通过 Maven Wrapper 编译并使用 `SearchTester` 运行：
+```bash
+./mvnw -B -ntp compile
+java -cp target/classes core.runner.SearchTester \
+  resources/problems-stage1.txt stud.g01.runner.PuzzleFeeder astar MANHATTAN
+```
+
+---
+
+### 2. 导出搜索记录并在网页中可视化
+
+#### 步骤一：一键导出解题轨迹与搜索树
+使用 `export-visualization.sh` 将求解过程（包含出队、分支生成与剪枝细节）导出为标准化 JSON 轨迹文件：
+
+```bash
+# 导出三阶问题在 A* 下的搜索过程至 results.json
+./scripts/export-visualization.sh resources/problems-stage1.txt results.json astar MANHATTAN
+
+# 导出四阶 PDB 求解过程（需追加 --allow-pdb）
+./scripts/export-visualization.sh resources/problems-stage3.txt results.json nida DISJOINT_PATTERN --allow-pdb
+```
+
+#### 步骤二：启动可视化前端
+前端项目位于 `visualization/` 目录，由 [Bun](https://bun.sh) 驱动：
+
+```bash
+cd visualization
 bun install
-bun run dev        # 开发服务器
-bun run test       # 校验与回放模型测试
-bun run build      # 类型检查并输出单文件 dist/index.html
+bun run dev
 ```
 
-`dist/index.html` 内联了全部脚本、样式与字体，可以直接双击打开，也由 `.github/workflows/pages.yml` 发布到 GitHub Pages。
+浏览器打开 `http://localhost:5173`，将刚刚生成的 `results.json` 拖入页面任意位置，即可立即进行可视化探索与回放！
 
-| 目录 | 职责 |
-| --- | --- |
-| `src/data/` | 导入校验、紧凑类型化数组、Worker 与 IndexedDB 记录库 |
-| `src/replay/` | 镜头序列、节点状态、候选队列与树布局，均为纯函数 |
-| `src/features/library/` | 问题记录表 |
-| `src/features/path/` | 解路径回放 |
-| `src/features/search/` | 搜索过程视图；`tree-renderer.ts` 负责画布绘制、动画与镜头 |
-| `src/app/` | 顶栏、导入引导、视图切换与全屏状态 |
-| `src/components/ui/` | shadcn/ui 组件 |
+---
 
-# OUC AI N-Puzzle 项目
+## 🎮 可视化系统快捷键
 
-基于课程提供的 Java 搜索框架实现 N-Puzzle 求解，支持 A*、IDA* 和模式数据库（PDB）启发函数。
+| 按键 | 解路径回放视图 | 搜索树过程视图 |
+| :--- | :--- | :--- |
+| `1` / `2` | 切换到路径视图 / 搜索视图 | 切换到路径视图 / 搜索视图 |
+| `Space` | 播放 / 暂停 | 播放 / 暂停 |
+| `←` / `→` | 上一步 / 下一步 | 上一步 / 下一步（单步微调） |
+| `Shift` + `←` / `→` | — | 上一轮 / 下一轮（按扩展轮次跳转） |
+| `Home` / `End` | 跳转至起点 / 终点 | 跳转至搜索起点 / 找到目标时刻 |
+| `F` / `Esc` | — | 进入 / 退出全屏展示 |
+| `C` | — | 开关镜头自动跟随当前焦点 |
+| `P` | — | 开关剪枝节点显示 |
+| `0` | — | 缩放重置，自适应展示整棵搜索树 |
 
-## 环境
+---
 
-- JDK 25
+## ⚙️ 算法引擎与启发式参数配置
 
-## 目录结构
+### 支持的引擎与启发函数矩阵
 
-```text
-.
-├── resources/              问题实例与 PDB 缓存
-├── scripts/                编译、运行和导出脚本
-├── src/
-│   ├── algs4/              算法工具库
-│   ├── core/               课程搜索框架
-│   └── stud/               学生实现，N-Puzzle 位于 g01/
-└── visualization/          网页可视化
+| 搜索引擎 | 标识符 | 描述 |
+| :--- | :--- | :--- |
+| **A\*** | `astar` | 经典图搜索 A* 算法，采用优先队列与延迟清理管理 Open 表 |
+| **IDA\*** | `ida` | 迭代加深 A* 算法，线性空间开销，适合大规模深层搜索 |
+| **NIDA\*** | `nida` | **N-Puzzle 专用超高速 IDA\***，集成状态逆映射与增量式状态推进 |
+| **Dijkstra** | `dijkstra` | 一致代价基准搜索，队列仅按实际步数 $g$ 排序 |
+
+| 启发函数 | 标识符 | 适用问题 | 特点与说明 |
+| :--- | :--- | :--- | :--- |
+| **Zero** | `ZERO` | 任意阶数 | 零估计，提供搜索算法的下界对照基准 |
+| **Misplaced** | `MISPLACED` | 任意阶数 | 统计不在目标位置的非零棋子数，耗时低但剪枝力较弱 |
+| **Manhattan** | `MANHATTAN` | 任意阶数 | 计算所有数字到目标格的曼哈顿距离和，通过预置表实现常数查表 |
+| **Disjoint PDB** | `DISJOINT_PATTERN` | 3 阶 / 4 阶 | 可加模式数据库，建表后剪枝能力极强 |
+
+### 模式数据库（PDB）规格与 JVM 优化参数
+
+系统在首次使用 PDB 时会自动触发 0-1 BFS 离线建表并建立本地缓存：
+- **3 阶 PDB**：3-3-2 分组，乘积编码，仅占用 13.8 KB。
+- **4 阶通用 PDB**：6-6-3 分组，排名编码（保留空格信息），净数据约 110 MiB。
+- **4 阶专用 PDB**：7-8 分组，连通分量编码，为 `nida` 引擎量身定制，内存占用约 482 MiB。
+
+可通过 JVM 系统属性微调高级优化（默认均为开启）：
+```bash
+# 关闭增量查表（回退到全量查表）
+-Dnpuzzle.pdb.incremental=false
+
+# 关闭对角线对称性增强（仅使用直接查表值）
+-Dnpuzzle.pdb.symmetry=false
 ```
 
-## 编译
+---
 
-使用 Maven Wrapper 编译，并运行格式检查与静态分析：
+## 🛠️ 开发者指南
+
+### 后端 Java 工程规范
+
+项目配置了完整的格式规范检查与静态分析：
 
 ```bash
+# 编译并执行 Spotless 格式校验与 SpotBugs 静态检查
 ./mvnw -B -ntp verify
-```
 
-自动格式化学生代码：
-
-```bash
+# 自动修复并格式化代码（遵循 Google Java Format AOSP 规范）
 ./mvnw spotless:apply
 ```
 
-也可运行 `./scripts/compile.sh`，将编译结果输出到 `out/`。Maven 的编译结果位于 `target/classes/`。
+### 前端构建与测试
 
-## 运行
-
-运行问题实例：
+前端基于现代 Web 技术栈构建，支持类型检查与单元测试：
 
 ```bash
-./scripts/run.sh problems-stage1.txt astar MISPLACED,MANHATTAN
+cd visualization
+
+# 运行自动化测试（回放模型逻辑与数据校验）
+bun run test
+
+# 生产环境打包（输出单文件离线 HTML 至 dist/index.html）
+bun run build
 ```
 
-脚本会先编译，再调用 `core.runner.SearchTester`。问题文件可省略 `resources/` 前缀。
+打包产物 `visualization/dist/index.html` 内联了所有脚本、样式及字体，**无需起任何本地 Web 服务器，直接双击该 HTML 即可在任何现代浏览器中运行**。同时该页面已通过 GitHub Actions 自动化部署至 GitHub Pages。
 
-| 文件 | 样例范围 |
-| --- | --- |
-| `problems-stage1.txt` | 要求文档中指定的 2 个三阶样例，均需在 1 秒内解决。 |
-| `problems-stage2.txt` | 老师 IDA* 测试文件中的全部 7 个四阶样例，按原顺序排列；其中第 1、2、5 个也在老师的 A* 测试文件中。 |
-| `problems-stage3.txt` | 要求文档中指定的 1 个四阶样例，需在 1 分钟内解决；它也是第二阶段文件的最后一个样例。 |
-| `problems-teacher-astar.txt` | 老师 A* 测试文件的全部 6 个样例，含 3 个三阶和 3 个四阶样例。 |
-| `problems-teacher-idastar.txt` | 老师 IDA* 测试文件的全部 10 个样例，含 3 个三阶和 7 个四阶样例。 |
+---
 
-与老师的运行结果逐项对照时，可使用对应的 `problems-teacher-*` 文件。第二阶段文件包含极难样例，直接使用 A* 或曼哈顿距离运行全部样例可能耗时很长或耗尽内存；老师的 IDA* 结果中没有最后一个样例的完成耗时。
-
-使用 Maven 编译后，也可直接运行：
-
-```bash
-java -cp target/classes core.runner.SearchTester \
-  resources/problems-stage1.txt stud.g01.runner.PuzzleFeeder astar MISPLACED,MANHATTAN
-```
-
-四个参数依次为：问题文件、`EngineFeeder` 实现类全限定名、搜索引擎、启发函数列表。
-
-- 搜索引擎：`astar`、`ida`、`nida`、`dijkstra`。
-- N-Puzzle 启发函数：`ZERO`（零估计）、`MISPLACED`（错位数）、`MANHATTAN`（曼哈顿距离）、`DISJOINT_PATTERN`（PDB），多个值用逗号分隔。
-- 四种引擎均可搭配上述任一启发函数。`nida` 始终使用 N-Puzzle 专用 IDA*，由启发函数提供完整估值或增量状态。Dijkstra 计算并记录所选 `h`，候选队列只按 `g` 排序；选择 `ZERO` 时即为零估计。
-
-Java API 也可直接注入处理同类状态的 `Predictor`，不需要注册枚举：
-
-```java
-Predictor heuristic = (state, goal) ->
-        2 * PuzzleHeuristics.manhattan((PuzzleBoard) state, (PuzzleBoard) goal);
-AbstractSearcher searcher = new PuzzleFeeder().getSearcher("nida", heuristic);
-```
-
-`getSearcher(engine, predictor)` 只按引擎选择算法，启发函数独立传入。专用搜索通过盘面比较判定目标，返回路径保留实际启发值，路径存储随深度增长。运行入口不检查启发函数的可采纳性或一致性。
-
-PDB 支持三阶和四阶棋盘，首次使用时建表，缓存存放在 `resources/pdb-cache/`。
-
-| 棋盘与引擎 | 分组与存储 | 距离表净大小 |
-| --- | --- | --- |
-| 三阶 | 3-3-2，乘积编码 | 13,851 字节 |
-| 四阶 `astar/ida/dijkstra` | 6-6-3，排名编码，保留空格位置 | 110.01 MiB |
-| 四阶 `nida` | 7-8，连通分量编码 | 约 482 MiB |
-
-四阶普通 PDB 去除了棋子位置重叠的无效索引，启发值与原乘积表一致。专用 PDB 把空格可零代价互达的位置合并为同一个自由连通分量，同时保留不同分量的距离。该压缩是无损的，IDA* 仍返回最短解。
-
-建表过程把空格可零代价到达的连通区域合并成一个状态，再按移动分组棋子的次数进行 BFS。完整排名表按空格位置保留全部距离，Component 表再将每个占用模式下各连通分量的距离向量去重，并用变宽位压缩保存排列到向量的映射。建表队列使用 32 位状态编码和固定大小的数组块，避免大数组翻倍扩容时的复制与内存峰值。以上大小只计常驻距离数据，首次建表还需要访问位图、BFS 队列和临时缓冲；不能据此把 Java 堆限制设为刚好等于表大小。四阶 7-8 建表仍然是耗时的预处理。
-
-四阶专用表只读取当前的 `component-le-*.bin`。缓存缺失或校验失败时直接运行 BFS 建表并写入新缓存，不再读取旧版 `component-*.bin` 或 `ranked-*.bin`。
-
-专用 IDA* 搭配 PDB 时，在查表前排除立即反向移动和路径环，超界候选只更新下一轮阈值。候选移动缓存新索引、距离和父状态，执行与撤销不再重复计算排名或查询 PDB。生成节点数仍按所有合法移动计数，便于与原实现对照。
-
-PDB 提供两个独立的 JVM 开关，默认均为 `true`，在创建启发函数时读取：
-
-| JVM 参数 | 作用 |
-| --- | --- |
-| `-Dnpuzzle.pdb.incremental=false` | 关闭 PDB 搜索上下文的增量查表，每个候选状态重新计算全部分组的索引和距离；仍使用相同的 PDB、搜索顺序和剪枝规则。普通 `astar/ida/dijkstra` 原本就完整查表。 |
-| `-Dnpuzzle.pdb.symmetry=false` | 关闭普通 PDB 与专用 `nida` 的主对角线对称增强，仅使用直接查表值。设为 `true` 时仍要求目标空格在主对角线上。 |
-
-例如，同时关闭两个功能：
-
-```bash
-java -Dnpuzzle.pdb.incremental=false -Dnpuzzle.pdb.symmetry=false \
-  -cp target/classes core.runner.SearchTester \
-  resources/problems-stage3.txt stud.g01.runner.PuzzleFeeder nida DISJOINT_PATTERN
-```
-
-使用 `scripts/run.sh` 时，可通过 `JAVA_OPTS` 传入上述 `-D` 参数。代码中先配置启发函数，再传给搜索器：
-
-```java
-Predictor pdb = DisjointPdbHeuristic.predictor(new PdbOptions(false, false));
-AbstractSearcher searcher = new NPuzzleIdaStar(pdb, observer);
-```
-
-PDB 的分组、增量和对称实现由启发函数提供；专用搜索器接收 `Predictor`，普通搜索器使用同一对象的完整估值接口。
-这些配置不改变距离表缓存格式，同一进程中可复用相同距离表运行不同组合。
-
-## N-Puzzle 输入格式
-
-每一行表示一个独立问题：
+## 📁 项目核心结构
 
 ```text
-n  <n*n 个初始状态数字>  <n*n 个目标状态数字>
+.
+├── resources/             # 预置数码测试问题样例文件
+├── scripts/               # 快速编译、运行与可视化轨迹导出脚本
+├── src/
+│   ├── core/              # 搜索通用框架抽象接口与评测入口
+│   └── stud/              # 核心求解实现（N-Puzzle 求解器、PDB 与优化算法）
+├── visualization/         # React 19 + TypeScript 可视化前端工程
+├── pom.xml                # Maven 工程配置（JDK 25 / Spotless / SpotBugs）
+└── README.md              # 项目主文档
 ```
 
-`0` 表示空格。例如：
+---
 
+## 📝 输入文件格式规范
+
+问题描述文件每一行为一个独立测试用例，采用空格分隔：
 ```text
-3 5 0 8 4 2 1 7 3 6 1 2 3 4 5 6 7 8 0
+<n>  <n*n 个初始状态数字>  <n*n 个目标状态数字>
 ```
-
-## 网页可视化与实验导出
-
-一次命令导出问题文件中每个实例的完整解路径和完整搜索过程：
-
-```bash
-./scripts/export-visualization.sh resources/problems-stage1.txt results.json astar MANHATTAN
+其中 `0` 代表空格。例如一个 3 阶（8 数码）标准测试实例：
+```text
+3  5 0 8 4 2 1 7 3 6  1 2 3 4 5 6 7 8 0
 ```
-
-参数依次为输入文件、输出 `.json`、引擎、启发函数列表；全部省略时使用上述默认值。引擎支持 `astar`、`ida`、`nida`、`dijkstra`，启发函数支持 `ZERO`、`MISPLACED`、`MANHATTAN`、`DISJOINT_PATTERN`，可独立组合。可用逗号指定多个启发函数，每个实例与启发函数组合生成一条独立记录，每条记录只执行一次实际搜索。Dijkstra 记录所选启发函数及其真实值，网页队列按 `g` 展示排序。使用 `DISJOINT_PATTERN` 时在末尾传入 `--allow-pdb`；PDB 的首次建表成本与普通命令相同。
-
-在网页「问题记录」中直接导入整个输出文件，无需拆分批量结果。格式为 `{"schemaVersion":2,"results":[...]}`：每条结果包含 `states`（包括起点和终点）、`goal`、算法与启发函数、`timeMs`、`generated`、`expanded`，以及 `trace` 的完整节点、扩展帧与解节点编号。每次 IDA* 迭代均保留一个根节点，生成计数不包含这些根节点。导入时检查棋盘、合法移动、节点父子关系、帧计数和解路径一致性；缺少完整过程的文件无法导入，需要重新导出。
-
-导出的耗时包含过程记录与本次搜索内的 PDB 初始化开销，不作为重复测量的基准性能。完整过程的文件大小与搜索规模相关，导出不设截断上限；输出文件已存在时拒绝覆盖。
-
