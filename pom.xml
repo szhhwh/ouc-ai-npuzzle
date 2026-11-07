@@ -37,7 +37,6 @@
             <includes>
               <include>src/stud/**/*.java</include>
             </includes>
-            <!-- AOSP 风格 = 4 空格缩进，与课程代码现有缩进一致 -->
             <googleJavaFormat>
               <version>1.36.1</version>
               <style>AOSP</style>

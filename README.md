@@ -169,10 +169,6 @@ AbstractSearcher searcher = new NPuzzleIdaStar(pdb, observer);
 PDB 的分组、增量和对称实现由启发函数提供；专用搜索器接收 `Predictor`，普通搜索器使用同一对象的完整估值接口。
 这些配置不改变距离表缓存格式，同一进程中可复用相同距离表运行不同组合。
 
-组合与开关回归检查：`bash scripts/test-pdb-options.sh`；追加 `--component` 可检查四阶 7-8 PDB，
-四阶检查需要现有缓存或首次建表。测试在 `target/pdb-tests/` 下使用独立缓存副本；
-默认堆上限为 2 GiB，四阶检查为 12 GiB，可通过 `PDB_TEST_HEAP` 覆盖。
-
 ## N-Puzzle 输入格式
 
 每一行表示一个独立问题：
