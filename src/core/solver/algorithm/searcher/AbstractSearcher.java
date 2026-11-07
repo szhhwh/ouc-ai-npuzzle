@@ -24,18 +24,53 @@ public abstract class AbstractSearcher {
     // 还未扩展的节点队列
     protected final Frontier frontier;
 
-    protected int nodesGenerated = 0;   //已生成的节点的个数
-    protected int nodesExpanded = 0;    //已扩展的节点的个数
+    protected long nodesGenerated = 0;
+    protected long nodesExpanded = 0;
+    protected static final boolean METRICS_ENABLED = !Boolean.getBoolean("experiment.metrics.off");
+
+    public long peakFrontier = -1, peakDepth = 0;
+    public long boundPruned = -1, cyclePruned = -1, duplicatePruned = -1;
+    public long heuristicEvaluations = 0, specializedEvaluations = -1;
+    public final java.util.List<long[]> iterations = new java.util.ArrayList<>();
+    private long deadlineNanos;
+
+    public final void setDeadlineNanos(long deadlineNanos) {
+        this.deadlineNanos = deadlineNanos;
+    }
+
+    protected final void checkDeadline(long expanded) {
+        if (deadlineNanos != 0 && (expanded & 4095) == 0
+                && System.nanoTime() - deadlineNanos >= 0) {
+            throw new SearchTimeout();
+        }
+    }
+
+    public static final class SearchTimeout extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        public SearchTimeout() {
+            super("search deadline exceeded", null, false, false);
+        }
+    }
+
+    protected void resetMetrics() {
+        peakFrontier = -1;
+        peakDepth = 0;
+        boundPruned = cyclePruned = duplicatePruned = -1;
+        heuristicEvaluations = 0;
+        specializedEvaluations = -1;
+        iterations.clear();
+    }
 
     public AbstractSearcher(Frontier frontier) {
         this.frontier = frontier;
     }
 
-    public int nodesGenerated() {
+    public long nodesGenerated() {
         return nodesGenerated;
     }
 
-    public int nodesExpanded() {
+    public long nodesExpanded() {
         return nodesExpanded;
     }
 

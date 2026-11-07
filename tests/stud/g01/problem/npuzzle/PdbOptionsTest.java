@@ -108,7 +108,7 @@ public final class PdbOptionsTest {
     }
 
     private static void searchModesFindShortestPaths() {
-        int[][] generated = new int[2][2], expanded = new int[2][2];
+        long[][] generated = new long[2][2], expanded = new long[2][2];
         boolean[] settings = {true, false};
         for (int i = 0; i < settings.length; i++) {
             boolean incremental = settings[i];
@@ -287,7 +287,7 @@ public final class PdbOptionsTest {
         else System.setProperty(key, value);
     }
 
-    private static void equal(int expected, int actual, String label) {
+    private static void equal(long expected, long actual, String label) {
         check(expected == actual, label + ": expected " + expected + ", got " + actual);
     }
 

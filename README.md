@@ -173,6 +173,32 @@ PDB 的分组、增量和对称实现由启发函数提供；专用搜索器接�
 四阶检查需要现有缓存或首次建表。测试在 `target/pdb-tests/` 下使用独立缓存副本；
 默认堆上限为 2 GiB，四阶检查为 12 GiB，可通过 `PDB_TEST_HEAP` 覆盖。
 
+## 算法与资源对比实验
+
+实验方案见 `EXPERIMENT_PLAN.md`。实验工具从标准目标盘面构造按最短解长度分层的样本，并依次运行三种搜索器和三种启发函数。运行前需要 Linux、JDK 25、Python 3 和可使用 `systemd-run --user --scope` 的用户会话。正式默认每次搜索限时 10 秒，搜索 JVM 由 cgroup 限制为 16 GiB 总内存、禁用交换空间，堆上限为 12 GiB；正式运行统一预热并排除首次 PDB 建表时间。
+
+```bash
+mvn -B -ntp -DskipTests compile
+mkdir -p result/experiment/certifier-classes
+cp -a target/classes/. result/experiment/certifier-classes/
+python3 scripts/generate-experiment-instances.py
+python3 scripts/run-experiment.py --seed 20261105 --timeout 10
+python3 scripts/summarize-experiment.py
+python3 scripts/report-experiment.py
+```
+
+样本、候选认证日志、随机运行顺序、每次结果、硬件及 JVM 内存时序和统计汇总保存在 `result/experiment/`。生成器和实验控制器支持按相同参数断点续跑；认证期间应保持 `certifier-classes` 不变。`results.jsonl` 中的超时和内存不足不是成功耗时。搜索器在统一的 10 秒上限协作退出并记录 timeout，控制器另设宽裕的 watchdog 防止失去响应；正常超时后继续使用已预热的工作进程。每个进程的 CPU 利用率以一个逻辑核心满载为 100%。
+
+运行中使用 `python3 scripts/experiment-progress.py` 查看已落盘的完成数、状态分布、逐次 RSS 覆盖、当前搜索及 JVM 启动次数；`watch -n 5 python3 scripts/experiment-progress.py` 每 5 秒刷新，按 `Ctrl+C` 只退出查看。进度命令为只读，不会影响正在运行的实验。
+
+每次搜索通过 `/proc/self/smaps_rollup` 页表扫描记录边界 `rss_start_bytes`、`rss_end_bytes`，并在搜索开始前向 `/proc/self/clear_refs` 写入 `5` 重置 `VmHWM`，结束时从 `/proc/self/status` 读取 `rss_peak_kernel_bytes`。`rss_peak_bytes` 取该内核高水位和起点、终点读数的最大值，以避免内核 RSS 记账误差使峰值小于边界值。峰值方法标识为 `linux_reset_vm_hwm`（汇总也接受 `kernel_reset_vm_hwm`）。这是页级精度的区间峰值，结合内核高水位与边界页表扫描，不是连续逐字节的瞬时曲线；它包含已加载的 PDB、JVM 基线和搜索期间的驻留占用，不能减去起点基线后把差值当作搜索内存开销。全程 1 秒硬件与 JVM 采样保留为趋势曲线，短搜索可标记采样不足，但采样最大值不替代该区间峰值。没有采集到的字段保持为空。重置语义参见 [proc_pid_clear_refs(5)](https://man7.org/linux/man-pages/man5/proc_pid_clear_refs.5.html)。
+
+`summary.json` 在全体、配置分层和实例层汇总所有已记录运行的 RSS，包括 timeout；成功耗时仍单独按实例内成功重复中位数统计。`run-hardware-summary.jsonl` 分别保留边界 RSS、内核区间峰值和离散采样汇总。报告器输出 `runs.csv` 的逐次状态、耗时、RSS start/end/peak 和方法，以及 `groups.csv` 的全部运行 RSS 分布和覆盖数；`pairs.csv` 保留同一实例上的成功耗时配对。`实验结果.md` 根据已有汇总生成结果分析、各阶最高计划难度对比与配对覆盖说明，不把超时上限当作完成耗时，也不推断尚未完成批次的总体结论。
+
+为使算法对比固定启发函数，四阶 `DISJOINT_PATTERN` 的三种搜索均使用普通 6-6-3 PDB；`nida` 通过完整估值接口使用同一 PDB，这与它默认的 7-8 增量 PDB 配置不同。三阶三种搜索均使用 3-3-2 PDB。生成节点包含随后被剪枝的合法后继，不含各轮根节点；不同搜索器的估值和剪枝顺序不同，其估值次数分为完整估值和专用搜索上下文估值。
+
+A* 的重复状态剪枝计数仅包括已扩展状态，不含候选队列拒绝的重复状态；候选队列峰值按有效状态数计算，不含延迟清理的旧队列项。峰值深度分别取 A* 已生成节点、通用 IDA* 已访问节点、专用 IDA* 已访问或已估值候选节点的最大深度。
+
 ## N-Puzzle 输入格式
 
 每一行表示一个独立问题：

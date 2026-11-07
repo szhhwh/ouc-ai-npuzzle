@@ -51,6 +51,10 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     public Deque<Node> search(Problem problem) {
         nodesGenerated = 0;
         nodesExpanded = 0;
+        resetMetrics();
+        boundPruned = cyclePruned = duplicatePruned = 0;
+        heuristicEvaluations = -1;
+        specializedEvaluations = 0;
         if (!problem.solvable()) {
             return null;
         }
@@ -60,6 +64,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         PuzzleBoard goal = ((NPuzzleProblem) problem).goalBoard();
         if (problem.goal(root.getState())) {
             int h = predictor.heuristics(initial, goal);
+            if (METRICS_ENABLED) heuristicEvaluations = 1;
             root.setHeuristic(h);
             if (observer != null) {
                 int id = observer.root(initial.cells(), h, h, 0);
@@ -71,10 +76,16 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         PuzzleSearchContext context = PuzzleSearchContext.create(initial, goal, predictor);
         if (workspace == null) workspace = new Workspace();
         Search search = new Search(context, transpositions, workspace, observer);
-        search.run(initial.permutationParity() ^ goal.permutationParity());
-
-        nodesGenerated = search.generated;
-        nodesExpanded = search.expanded;
+        try {
+            search.run(initial.permutationParity() ^ goal.permutationParity());
+        } finally {
+            nodesGenerated = search.generated;
+            nodesExpanded = search.expanded;
+            if (METRICS_ENABLED && !(predictor instanceof PuzzleHeuristic)) {
+                heuristicEvaluations = specializedEvaluations;
+                specializedEvaluations = -1;
+            }
+        }
         if (search.foundMoves == null) {
             return null;
         }
@@ -135,14 +146,14 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
     }
 
     /** 一次搜索的遍历状态；盘面和启发值由 context 管理。 */
-    private static final class Search {
+    private final class Search {
         private final PuzzleSearchContext context;
         private final Workspace workspace;
         private final LongHashSet pathSet;
         private final Transpositions transpositions;
         private boolean cacheActive;
         int[] foundMoves;
-        private int generated, expanded;
+        private long generated, expanded;
         private final Observer observer;
         private int[] tracePath;
         private final PuzzleSearchContext.Move traceMove;
@@ -165,14 +176,30 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         /** 奇偶对齐的迭代加深主体，foundMoves 保存命中的移动序列。 */
         void run(int parity) {
             int h0 = context.heuristic();
+            if (METRICS_ENABLED) specializedEvaluations++;
             // N-Puzzle 的所有解长具有相同奇偶性，界限向上对齐。
             int bound = ((h0 ^ parity) & 1) != 0 ? h0 + 1 : h0;
 
             while (foundMoves == null) {
+                long startGenerated = generated, startExpanded = expanded;
                 if (cacheActive) transpositions.clear();
                 if (observer != null)
                     tracePath[0] = observer.root(context.board, h0, bound, iteration);
-                int nextBound = cacheActive ? dfsGraph(0, bound, -1) : dfsTree(0, bound, -1);
+                int nextBound;
+                boolean complete = false;
+                try {
+                    nextBound = cacheActive ? dfsGraph(0, bound, -1) : dfsTree(0, bound, -1);
+                    complete = true;
+                } finally {
+                    if (METRICS_ENABLED)
+                        iterations.add(
+                                new long[] {
+                                    bound,
+                                    expanded - startExpanded,
+                                    generated - startGenerated,
+                                    complete ? 1 : 0
+                                });
+                }
                 if (nextBound == INFINITY) {
                     return; // 搜遍全树仍未找到目标，可解性已经检查过，实际不会走到这里
                 }
@@ -191,6 +218,8 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
          * @return 本子树中被剪枝结点的最小 f 值
          */
         private int dfsTree(int depth, int bound, int previousBlank) {
+            checkDeadline(expanded);
+            if (METRICS_ENABLED) peakDepth = Math.max(peakDepth, depth);
             if (!cacheActive && expanded >= 4096) {
                 transpositions.allocate();
                 transpositions.clear();
@@ -211,15 +240,21 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             for (int t : context.neighbors[context.blank]) {
                 generated++;
                 if (t == previousBlank) {
+                    if (METRICS_ENABLED) cyclePruned++;
                     observeSkipped(depth, t, "cycle-pruned");
                     continue;
                 }
                 long childCode = context.codeAfterMove(t);
                 if (pathSet.contains(childCode)) {
+                    if (METRICS_ENABLED) cyclePruned++;
                     observeSkipped(depth, t, "cycle-pruned");
                     continue;
                 }
                 int childF = depth + 1 + context.prepare(t, childCode, level[n], bound - depth - 1);
+                if (METRICS_ENABLED) {
+                    specializedEvaluations++;
+                    peakDepth = Math.max(peakDepth, depth + 1);
+                }
                 if (observer != null)
                     level[n].traceId =
                             observer.child(
@@ -231,6 +266,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                                     level[n].heuristic,
                                     childF > bound ? "bound-pruned" : "frontier");
                 if (childF > bound) {
+                    if (METRICS_ENABLED) boundPruned++;
                     min = Math.min(min, childF);
                     continue;
                 }
@@ -265,12 +301,15 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
         /** Once activated, best-g pruning replaces the second path hash entirely. */
         private int dfsGraph(int depth, int bound, int previousBlank) {
+            checkDeadline(expanded);
+            if (METRICS_ENABLED) peakDepth = Math.max(peakDepth, depth);
             if (context.isGoal()) {
                 foundMoves = Arrays.copyOf(workspace.moves, depth);
                 if (observer != null) observer.visit(tracePath[depth], true, bound, iteration);
                 return INFINITY;
             }
             if (transpositions.visit(context.code, depth)) {
+                if (METRICS_ENABLED) duplicatePruned++;
                 if (observer != null) observer.prune(tracePath[depth], "transposition-pruned");
                 return INFINITY;
             }
@@ -284,15 +323,21 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             for (int t : context.neighbors[context.blank]) {
                 generated++;
                 if (t == previousBlank) {
+                    if (METRICS_ENABLED) cyclePruned++;
                     observeSkipped(depth, t, "cycle-pruned");
                     continue;
                 }
                 long childCode = context.codeAfterMove(t);
                 if (transpositions.dominated(childCode, depth + 1)) {
+                    if (METRICS_ENABLED) duplicatePruned++;
                     observeSkipped(depth, t, "transposition-pruned");
                     continue;
                 }
                 int childF = depth + 1 + context.prepare(t, childCode, level[n], bound - depth - 1);
+                if (METRICS_ENABLED) {
+                    specializedEvaluations++;
+                    peakDepth = Math.max(peakDepth, depth + 1);
+                }
                 if (observer != null)
                     level[n].traceId =
                             observer.child(
@@ -304,6 +349,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                                     level[n].heuristic,
                                     childF > bound ? "bound-pruned" : "frontier");
                 if (childF > bound) {
+                    if (METRICS_ENABLED) boundPruned++;
                     min = Math.min(min, childF);
                     continue;
                 }

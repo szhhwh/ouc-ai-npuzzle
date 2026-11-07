@@ -61,8 +61,8 @@ public final class HeuristicCompositionTest {
         Deque<Node> first = searcher.search(problem);
         verifyPath(first, MEDIUM, GOAL, predictor, engine + " medium");
         check(predictor.calls > first.size(), engine + " evaluates states outside the returned path");
-        int generated = searcher.nodesGenerated();
-        int expanded = searcher.nodesExpanded();
+        long generated = searcher.nodesGenerated();
+        long expanded = searcher.nodesExpanded();
         if (engine.equals("nida")) {
             check(expanded > first.size(), "custom-h nida explores and backtracks on the medium fixture");
         }

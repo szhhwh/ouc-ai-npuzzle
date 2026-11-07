@@ -235,7 +235,7 @@ final class SearchTrace implements IdAStar.Observer, NPuzzleIdaStar.Observer {
         return result;
     }
 
-    void validateCounts(int generated, int expanded) {
+    void validateCounts(long generated, long expanded) {
         long roots = nodes.stream().filter(node -> node.parent < 0).count();
         if (generated != nodes.size() - roots
                 || expanded != frames.size() - 1

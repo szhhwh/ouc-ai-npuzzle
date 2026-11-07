@@ -30,6 +30,9 @@ public final class BestFirstSearcher extends AbstractSearcher {
 
 	@Override
 	public Deque<Node> search(Problem problem) {
+		resetMetrics();
+		peakFrontier = 0;
+		duplicatePruned = 0;
 		// 先判断问题是否可解，无解时直接返回解路径为null
 		if (!problem.solvable()) {
 			return null;
@@ -43,10 +46,13 @@ public final class BestFirstSearcher extends AbstractSearcher {
 
 		// 起始节点root
 		Node root = problem.root(predictor);
+		if (METRICS_ENABLED) heuristicEvaluations++;
 		frontier.offer(root);
+		if (METRICS_ENABLED) peakFrontier = 1;
 
 		// 搜索。。。
 		while (true) {
+			checkDeadline(nodesExpanded);
 
 			if (frontier.isEmpty())  // 在到达目标状态之前frontier变为空，则问题无解
 				return null;
@@ -61,9 +67,15 @@ public final class BestFirstSearcher extends AbstractSearcher {
 
 			//对节点node进行扩展  Expansion
 			for (Node child : problem.childNodes(node, predictor)) {
+				if (METRICS_ENABLED) {
+					heuristicEvaluations++;
+					peakDepth = Math.max(peakDepth, child.getPathCost());
+				}
 				nodesGenerated++;
-				if (!expanded(child)) // 如果新生成的节点（新扩展出的节点）还没有被扩展，则插入到frontier中。
-					frontier.offer(child);  //同学们可以试一下，
+				if (!expanded(child)) {
+					frontier.offer(child);
+					if (METRICS_ENABLED) peakFrontier = Math.max(peakFrontier, frontier.size());
+				} else if (METRICS_ENABLED) duplicatePruned++;
 				       // revisited也一律加到Frontier的情况，和扔掉不好的两种情况
 				// 如果已经扩展过，就舍弃掉。
 			}
