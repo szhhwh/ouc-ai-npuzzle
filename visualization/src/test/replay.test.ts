@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import demo from "@/data/demo.json";
 import { compactRecord } from "@/data/compact";
 import { ALGORITHMS, HEURISTICS, type CompactTrace, type RawRecord } from "@/data/types";
 import { validateRecord } from "@/data/validate";
@@ -8,7 +9,7 @@ import astar from "./fixtures/astar.json";
 import ida from "./fixtures/ida.json";
 import nida from "./fixtures/nida.json";
 
-const records = [...astar.results, ...ida.results, ...nida.results] as unknown as RawRecord[];
+const records = [...astar.results, ...ida.results, ...nida.results, ...demo.results] as unknown as RawRecord[];
 const clone = (record: RawRecord): RawRecord => structuredClone(record);
 
 const oneMoveDijkstra: RawRecord = {
@@ -123,7 +124,7 @@ describe("replay model", () => {
   });
 
   it("A* always picks an open node with the smallest (f, g), matching the Java priority queue", () => {
-    for (const record of astar.results as unknown as RawRecord[]) {
+    for (const record of [...astar.results, ...demo.results] as unknown as RawRecord[]) {
       const { trace } = compactRecord(validateRecord(record));
       for (const scene of everyPick(trace)) {
         expect(isOpen(trace, scene, scene.current)).toBe(true);

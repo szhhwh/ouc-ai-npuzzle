@@ -121,7 +121,7 @@ bun install
 bun run dev
 ```
 
-浏览器打开 `http://localhost:5173`，将刚刚生成的 `results.json` 拖入页面任意位置，即可立即进行可视化探索与回放！
+浏览器打开 `http://localhost:5173`，将生成的 `results.json` 拖入页面，即可探索搜索过程与回放解路径。没有记录时，也可点击「加载 3×3 示范样例」直接体验。
 
 ---
 

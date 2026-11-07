@@ -1,8 +1,10 @@
-import { Check, Copy, FileJson, LoaderCircle } from "lucide-react";
+import { Check, Copy, FileJson, LoaderCircle, Play } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { PuzzleBoard } from "@/components/puzzle-board";
 import { Button } from "@/components/ui/button";
+import demoJson from "@/data/demo.json?raw";
+import { importFiles, useLibrary } from "@/data/library";
 import { useImportPicker } from "./import-context";
 
 const EXPORT_COMMAND = "./scripts/export-visualization.sh resources/problems-stage1.txt results.json astar MANHATTAN";
@@ -23,6 +25,8 @@ function useDemoBoards() {
 
 export function EmptyState({ failure }: { failure: string | null }) {
   const pickFiles = useImportPicker();
+  const hasRecords = useLibrary((state) => state.metas.length > 0);
+  const busy = useLibrary((state) => state.busy);
   const boards = useDemoBoards();
   const [frame, setFrame] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -71,6 +75,17 @@ export function EmptyState({ failure }: { failure: string | null }) {
               <FileJson />
               选择 JSON 文件
             </Button>
+            {!hasRecords && (
+              <Button
+                variant="outline"
+                size="lg"
+                disabled={busy}
+                onClick={() => void importFiles([new File([demoJson], "3x3-demo.json", { type: "application/json" })]).catch(() => {})}
+              >
+                {busy ? <LoaderCircle className="animate-spin" /> : <Play />}
+                {busy ? "正在加载…" : "加载 3×3 示范样例"}
+              </Button>
+            )}
             <span className="text-[13px] text-ink-soft">或直接把文件拖到页面任意位置</span>
           </div>
           <div className="flex flex-col gap-2">
