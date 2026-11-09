@@ -23,10 +23,22 @@ import stud.g01.problem.npuzzle.NPuzzleProblem;
 import stud.g01.problem.npuzzle.PuzzleBoard;
 import stud.g01.problem.npuzzle.PuzzleHeuristicType;
 
-/** One actual Java search exports both its complete process and its solution. */
+/**
+ * N-Puzzle 搜索过程与解路径导出工具。 运行指定的搜索算法求解输入的各个题目实例，收集完整的搜索轨迹与解路径， 并将包含结点生成、访问展开、修剪原因与性能计时的完整结构导出为 JSON
+ * 文件。
+ */
 public final class SolutionExporter {
+
+    /** 私有构造函数，防止工具类被实例化。 */
     private SolutionExporter() {}
 
+    /**
+     * 导出工具的命令行主程序入口。 解析命令行参数，验证输入文件与输出路径，逐题运行配置的算法与启发函数组合， 并在每道题目求解完成后严格验证解路径的有效性，最终生成结构化 JSON
+     * 结果文件。
+     *
+     * @param args 命令行参数，依次包含输入路径、输出路径、算法标识、启发函数列表以及可选的 PDB 启用选项
+     * @throws IOException 当输入输出文件读取或写入失败时抛出
+     */
     public static void main(String[] args) throws IOException {
         if (args.length != 4 && args.length != 5) {
             throw new IllegalArgumentException(
@@ -48,6 +60,7 @@ public final class SolutionExporter {
             throw new IllegalArgumentException("输出已存在，请选择新文件，避免覆盖实验");
         }
         List<PuzzleHeuristicType> kinds = parseHeuristics(args[3], allowPdb);
+        // 先写临时文件，完整成功后再原子移动到目标路径
         Path temporary =
                 Files.createTempFile(
                         Objects.requireNonNull(output.getParent()), ".npuzzle-export-", ".tmp");
@@ -76,6 +89,7 @@ public final class SolutionExporter {
                         double millis = (System.nanoTime() - start) / 1_000_000.0;
                         if (path == null) throw new IllegalStateException("未求得解: " + index);
                         List<byte[]> states = trace.solution();
+                        // 解路径与轨迹必须逐步一致，且最终到达目标
                         validateSolution(problem, path, states);
                         trace.validateCounts(searcher.nodesGenerated(), searcher.nodesExpanded());
                         if (!first) out.write(",\n");
@@ -89,14 +103,20 @@ public final class SolutionExporter {
                 if (index == 0) throw new IllegalArgumentException("输入没有实例");
                 out.write("]}\n");
             }
-            // Publish only after every search and the complete JSON write succeeds; never replace a
-            // file.
             Files.move(temporary, output);
         } finally {
             Files.deleteIfExists(temporary);
         }
     }
 
+    /**
+     * 解析命令行中由逗号分隔的启发函数名称列表，并检查模式数据库选项。
+     *
+     * @param names 逗号分隔的启发函数名称字符串
+     * @param allowPdb 是否允许使用模式数据库
+     * @return 解析得到的启发函数类型列表
+     * @throws IllegalArgumentException 当启发函数不支持、存在重复或模式数据库标志不匹配时抛出
+     */
     private static List<PuzzleHeuristicType> parseHeuristics(String names, boolean allowPdb) {
         LinkedHashSet<PuzzleHeuristicType> kinds = new LinkedHashSet<>();
         for (String name : names.split(",", -1)) {
@@ -117,6 +137,20 @@ public final class SolutionExporter {
         return List.copyOf(kinds);
     }
 
+    /**
+     * 将单次搜索实验的元数据、耗时、状态序列与搜索轨迹写入 JSON 流中。
+     *
+     * @param out 输出流写入器
+     * @param input 输入文件路径
+     * @param engine 搜索算法引擎标识
+     * @param kind 启发函数枚举类型
+     * @param problem 求解的问题实例
+     * @param searcher 算法搜索器
+     * @param millis 搜索耗时毫秒数
+     * @param states 解路径包含的所有棋盘状态列表
+     * @param trace 完整搜索轨迹对象
+     * @throws IOException 当写入发生异常时抛出
+     */
     private static void writeRecord(
             BufferedWriter out,
             Path input,
@@ -168,6 +202,13 @@ public final class SolutionExporter {
         out.write('}');
     }
 
+    /**
+     * 将算法引擎代码转换为标准的展示名称。
+     *
+     * @param engine 算法引擎简称
+     * @return 对应的标准算法展示名称
+     * @throws IllegalArgumentException 当传入不支持的算法引擎时抛出
+     */
     static String algorithmName(String engine) {
         return switch (engine) {
             case "astar" -> "A*";
@@ -178,6 +219,12 @@ public final class SolutionExporter {
         };
     }
 
+    /**
+     * 校验单行输入文本的数据格式与排列合法性。
+     *
+     * @param line 包含一行题目数据的文本行
+     * @throws IllegalArgumentException 当棋盘边长不为 3 或 4、标记数量不符或棋盘不是合法排列时抛出
+     */
     private static void validateInput(String line) {
         String[] tokens = line.trim().split("\\s+");
         int n = Integer.parseInt(tokens[0]);
@@ -196,6 +243,14 @@ public final class SolutionExporter {
         }
     }
 
+    /**
+     * 校验搜索算法返回的解路径是否与轨迹记录一致，且每一步转移均合法并最终到达目标。
+     *
+     * @param problem 待求解的问题实例
+     * @param path 搜索算法返回的路径结点队列
+     * @param states 轨迹记录中提取的状态字节数组列表
+     * @throws IllegalStateException 当路径与轨迹不一致、转移非法或未到达目标时抛出
+     */
     private static void validateSolution(
             NPuzzleProblem problem, Deque<Node> path, List<byte[]> states) {
         PuzzleBoard previous = (PuzzleBoard) problem.root().getState();
@@ -207,6 +262,7 @@ public final class SolutionExporter {
         for (Node node : path) {
             PuzzleBoard board = (PuzzleBoard) node.getState();
             validateStep(previous, board);
+            // 路径状态必须与轨迹记录一致
             if (!Arrays.equals(states.get(index++), board.cells())) {
                 throw new IllegalStateException("搜索路径与过程结点不一致");
             }
@@ -215,15 +271,24 @@ public final class SolutionExporter {
         if (!previous.equals(problem.goalBoard())) throw new IllegalStateException("未到目标");
     }
 
+    /**
+     * 校验两个相邻状态之间的单步移动合法性。 空格必须移动且仅在曼哈顿距离为 1 的相邻格子之间互换，其余格子保持原样不变。
+     *
+     * @param a 移动前的棋盘状态
+     * @param b 移动后的棋盘状态
+     * @throws IllegalStateException 当移动步幅不是相邻格子或数字变换非法时抛出
+     */
     private static void validateStep(PuzzleBoard a, PuzzleBoard b) {
         int x = a.blank();
         int y = b.blank();
         int n = a.size();
+        // 空格必须恰好移动一格
         if (Math.abs(x / n - y / n) + Math.abs(x % n - y % n) != 1) {
             throw new IllegalStateException("非法移动");
         }
         byte[] before = a.cells();
         byte[] after = b.cells();
+        // 除空格与目标格子互换外，其余格子必须保持不变
         for (int i = 0; i < before.length; i++) {
             if (after[i] != (i == x ? before[y] : i == y ? 0 : before[i])) {
                 throw new IllegalStateException("非法棋盘变化");

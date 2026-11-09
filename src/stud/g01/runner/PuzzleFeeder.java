@@ -14,19 +14,20 @@ import stud.g01.problem.npuzzle.PuzzleHeuristicType;
 import stud.g01.problem.npuzzle.PuzzleHeuristics;
 import stud.queue.PqFrontier;
 
-/** N-Puzzle 问题的 EngineFeeder。从输入文本解析问题实例，并提供 Frontier 和启发函数。 */
+/** N-Puzzle 问题的求解适配器，继承自框架的 EngineFeeder。 负责从输入文本解析问题实例，并提供开放列表与启发预测器。 */
 public class PuzzleFeeder extends EngineFeeder<PuzzleHeuristicType> {
 
+    /** 构造求解适配器，指定启发函数枚举类型，并注册专用的 N-Puzzle IDA* 搜索算法引擎。 */
     public PuzzleFeeder() {
         super(PuzzleHeuristicType.class);
         registerEngine("nida", NPuzzleIdaStar::new);
     }
 
     /**
-     * 解析输入的每一行，生成问题实例列表，空行跳过。每行的格式是：规模，接着是 size 平方个初始盘面数字，再接着是 size 平方个目标盘面数字，数字按行主序排列，0 表示空格。
+     * 解析输入的每一行文本，生成问题实例列表，跳过空白行。 每一行的格式为：棋盘边长，接着是边长平方个初始盘面数字，再接着是边长平方个目标盘面数字。 数字按行主序排列，0 表示空格位置。
      *
      * @param problemLines 输入文本的所有行
-     * @return 问题实例列表
+     * @return 解析得到的问题实例列表
      */
     @Override
     public ArrayList<Problem> getProblems(ArrayList<String> problemLines) {
@@ -35,17 +36,14 @@ public class PuzzleFeeder extends EngineFeeder<PuzzleHeuristicType> {
         for (String line : problemLines) {
             if (line.isBlank()) continue;
 
-            // 每行依次是规模、初始盘面、目标盘面
             String[] tokens = line.trim().split("\\s+");
             int size = Integer.parseInt(tokens[0]);
             int count = size * size;
 
-            // 初始盘面
             byte[] initCells = new byte[count];
             for (int i = 0; i < count; i++) {
                 initCells[i] = Byte.parseByte(tokens[1 + i]);
             }
-            // 目标盘面
             byte[] goalCells = new byte[count];
             for (int i = 0; i < count; i++) {
                 goalCells[i] = Byte.parseByte(tokens[1 + count + i]);
@@ -61,10 +59,10 @@ public class PuzzleFeeder extends EngineFeeder<PuzzleHeuristicType> {
     }
 
     /**
-     * 按估值类型生成 Frontier。
+     * 根据结点估值类型构造优先队列开放列表。
      *
      * @param type 结点估值类型
-     * @return Frontier 实例
+     * @return 优先队列开放列表实例
      */
     @Override
     public Frontier getFrontier(EvaluationType type) {
@@ -72,10 +70,11 @@ public class PuzzleFeeder extends EngineFeeder<PuzzleHeuristicType> {
     }
 
     /**
-     * 按类型取启发函数，具体实现注册在 PuzzleHeuristics 中。
+     * 按类型获取启发预测器，具体实现注册在 PuzzleHeuristics 中。
      *
      * @param type 启发函数类型
-     * @return 对应的启发函数，不支持时抛出异常
+     * @return 对应的启发预测器
+     * @throws IllegalArgumentException 当传入不支持的启发函数类型时抛出
      */
     @Override
     public Predictor getPredictor(PuzzleHeuristicType type) {

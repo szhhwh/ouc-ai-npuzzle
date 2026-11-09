@@ -1,9 +1,19 @@
 package stud.g01.problem.npuzzle;
 
-/** Ranked PDB 分组表的磁盘缓存与构建入口，供 6-6-3 等精确分组共用。 */
+/** 排名模式数据库分组表的磁盘缓存与构建入口，供 6-6-3 等精确分组共用。 */
 public final class RankedPdbHeuristic {
+    /** 私有构造方法，防止工具类被实例化。 */
     private RankedPdbHeuristic() {}
 
+    /**
+     * 加载指定分组的排名模式数据库表，若缓存未命中则调用构建器构建并写盘。
+     *
+     * @param size 棋盘边长
+     * @param goal 目标盘面数组
+     * @param tiles 模式数字块列表
+     * @param repository 模式数据库仓库
+     * @return 构建或加载好的二维距离表
+     */
     static byte[][] loadOrBuildGroup(int size, byte[] goal, int[] tiles, PdbRepository repository) {
         PdbCache cache = new PdbCache(repository, PdbCache.Format.RANKED, size, goal, tiles);
         int blocks = size * size - tiles.length;

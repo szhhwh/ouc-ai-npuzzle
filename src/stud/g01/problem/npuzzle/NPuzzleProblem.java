@@ -6,13 +6,33 @@ import core.problem.State;
 import core.solver.queue.Node;
 import java.util.Deque;
 
-/** N-Puzzle 数字华容道问题 */
+/**
+ * N-Puzzle 数字华容道问题。
+ *
+ * <p>定义了初始盘面、目标盘面、单步代价、动作可行性判定、可解性检验以及解路径展示。
+ */
 public class NPuzzleProblem extends Problem {
 
+    /**
+     * 构造一个 N-Puzzle 问题实例。
+     *
+     * @param initialState 初始状态，必须为指定边长的 PuzzleBoard
+     * @param goal 目标状态，必须为指定边长的 PuzzleBoard
+     * @param size 棋盘边长，如 3 阶为 3，4 阶为 4
+     * @throws IllegalArgumentException 当状态不是合法边长的 PuzzleBoard 时抛出
+     */
     public NPuzzleProblem(State initialState, State goal, int size) {
         super(requireBoard(initialState, size), requireBoard(goal, size), size);
     }
 
+    /**
+     * 校验并转换盘面状态类型。
+     *
+     * @param state 待检验的状态对象
+     * @param size 期望的棋盘边长
+     * @return 转换后的 PuzzleBoard 实例
+     * @throws IllegalArgumentException 当 state 不是指定边长的 PuzzleBoard 时抛出
+     */
     private static PuzzleBoard requireBoard(State state, int size) {
         if (!(state instanceof PuzzleBoard board) || board.size() != size) {
             throw new IllegalArgumentException("Expected a PuzzleBoard of size " + size);
@@ -21,28 +41,32 @@ public class NPuzzleProblem extends Problem {
     }
 
     /**
-     * 取出目标盘面。
+     * 获取目标盘面。
      *
-     * @return 目标盘面
+     * @return 目标盘面实例
      */
     public PuzzleBoard goalBoard() {
         return (PuzzleBoard) goal;
     }
 
     /**
-     * 判断问题是否可解，对任意目标盘面都成立。
+     * 判断当前问题实例是否可解，对任意合法目标盘面均成立。
      *
-     * @return 可解返回 true，否则返回 false
+     * <p>对于 3 阶与 4 阶棋盘，利用预计算的排列奇偶性与空格网格染色奇偶性进行快速判定； 对于其它规模的棋盘，通过计算初始盘面相对于目标排名的逆序数与空格行差进行判定。
+     *
+     * @return 可解返回 true，无解返回 false
      */
     @Override
     public boolean solvable() {
         PuzzleBoard init = (PuzzleBoard) initialState;
         PuzzleBoard goalBoard = (PuzzleBoard) goal;
         int n = init.size();
+        // 3 阶与 4 阶用排列奇偶性与空格网格染色的守恒量常数时间判定
         if (n <= 4) {
-            // Every move flips both full-permutation parity and blank-square colour.
             int initialColour = init.blank() / n + init.blank() % n;
             int goalColour = goalBoard.blank() / n + goalBoard.blank() % n;
+            // 每次移动同时翻转全排列奇偶性与空格坐标和奇偶性，
+            // 因此“排列奇偶性 xor 空格染色奇偶性”是可达性不变量。
             return ((init.permutationParity()
                                     ^ goalBoard.permutationParity()
                                     ^ initialColour
@@ -51,14 +75,13 @@ public class NPuzzleProblem extends Problem {
                     == 0;
         }
 
-        // rank[v] 是数字 v 在目标盘面中的排名
+        // 更大规模用逆序数加空格行差的经典判据
         int[] rank = new int[n * n];
         int r = 0;
         for (byte v : goalBoard.cellsInternal()) {
             if (v != 0) rank[v] = r++;
         }
 
-        // 数初始盘面排名序列的逆序数
         byte[] cells = init.cellsInternal();
         int inv = 0;
         for (int i = 0; i < cells.length; i++) {
@@ -68,7 +91,6 @@ public class NPuzzleProblem extends Problem {
             }
         }
 
-        // 初始空格与目标空格的行号之差
         int rowDiff = Math.abs(init.blank() / n - goalBoard.blank() / n);
 
         return (inv + (n + 1) * rowDiff) % 2 == 0;
