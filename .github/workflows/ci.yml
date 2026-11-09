@@ -28,5 +28,20 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Build with quality gates (compile + Spotless + SpotBugs)
+      - name: Verify Java (compile + Spotless + SpotBugs)
         run: ./mvnw -B -ntp verify
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        working-directory: visualization
+        run: bun install --frozen-lockfile
+
+      - name: Test frontend
+        working-directory: visualization
+        run: bun run test
+
+      - name: Build frontend
+        working-directory: visualization
+        run: bun run build

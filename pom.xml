@@ -17,7 +17,7 @@
   </properties>
 
   <build>
-    <!-- 课程项目源码直接位于 src/ 下（algs4/core/stud），保持原目录结构不变 -->
+    <!-- 课程项目源码直接位于 src/ 下（algs4/core/stud）-->
     <sourceDirectory>src</sourceDirectory>
 
     <plugins>
@@ -27,7 +27,7 @@
         <version>3.14.0</version>
       </plugin>
 
-      <!-- 代码格式化：仅作用于 stud/**（algs4/core 为教师框架代码，保持原样） -->
+      <!-- 代码格式化：作用于学生模块，core 的通用接口单独维护 -->
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
@@ -55,7 +55,7 @@
         </executions>
       </plugin>
 
-      <!-- 静态分析：仅分析 stud 包，避免教师框架代码产生噪音 -->
+      <!-- 静态分析：仅分析 stud 包 -->
       <plugin>
         <groupId>com.github.spotbugs</groupId>
         <artifactId>spotbugs-maven-plugin</artifactId>
@@ -63,7 +63,6 @@
         <configuration>
           <effort>Max</effort>
           <threshold>Medium</threshold>
-          <!-- "stud.-" 表示 stud 包及其全部子包 -->
           <onlyAnalyze>stud.-</onlyAnalyze>
           <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
           <failOnError>true</failOnError>

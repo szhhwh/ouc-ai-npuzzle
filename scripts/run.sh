@@ -11,7 +11,7 @@ usage() {
 用法：$(basename "$0") <问题文件> <搜索引擎> [启发函数列表]
 
 搜索引擎：astar | ida | nida | dijkstra
-启发函数列表：逗号分隔，默认见下方各阶段配置
+启发函数列表：逗号分隔，默认 MANHATTAN
 
 示例：
   $(basename "$0") resources/problems-stage1.txt astar MISPLACED,MANHATTAN
@@ -27,17 +27,24 @@ fi
 
 PROBLEMS="$1"
 ENGINE="$2"
-HEURISTICS="${3:-}"
+HEURISTICS="${3-MANHATTAN}"
 
+# Prefer caller-relative paths, then repository paths and resource basenames.
 if [[ ! -f "$PROBLEMS" ]]; then
-  PROBLEMS="$PROJECT_ROOT/resources/$1"
-  if [[ ! -f "$PROBLEMS" ]]; then
+  if [[ -f "$PROJECT_ROOT/$1" ]]; then
+    PROBLEMS="$PROJECT_ROOT/$1"
+  elif [[ -f "$PROJECT_ROOT/resources/$1" ]]; then
+    PROBLEMS="$PROJECT_ROOT/resources/$1"
+  else
     echo "错误：问题文件不存在：$1" >&2
     usage >&2
     exit 1
   fi
 fi
+PROBLEMS="$(cd "$(dirname "$PROBLEMS")" && pwd)/$(basename "$PROBLEMS")"
 
+# JAVA_OPTS remains a whitespace-separated option list; do not evaluate shell code.
+read -r -a JAVA_OPTIONS <<< "${JAVA_OPTS:-}"
 "$SCRIPT_DIR/compile.sh"
 cd "$PROJECT_ROOT"
-java ${JAVA_OPTS:-} -cp out core.runner.SearchTester "$PROBLEMS" "$FEEDER" "$ENGINE" "$HEURISTICS"
+exec java "${JAVA_OPTIONS[@]}" -cp target/classes core.runner.SearchTester "$PROBLEMS" "$FEEDER" "$ENGINE" "$HEURISTICS"
