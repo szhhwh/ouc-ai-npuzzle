@@ -169,6 +169,99 @@
   }
 }
 
+/* Reserve space for the controls before fitting the square board to its container. */
+.path-layout {
+  display: block;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+.path-replay {
+  min-width: 0;
+  min-height: 340px;
+  height: calc(100svh - 3.5rem);
+  padding: clamp(12px, 2vh, 24px) clamp(16px, 3vw, 40px);
+}
+.path-replay-content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(8px, 2vh, 20px);
+  width: 100%;
+  max-width: 640px;
+  height: 100%;
+  margin-inline: auto;
+}
+.path-step-number {
+  font-size: clamp(2rem, 7vh, 3.75rem);
+}
+.path-board-space {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+  container-type: size;
+}
+.path-board {
+  width: min(100cqw, 100cqh, 520px);
+}
+.path-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+  justify-self: center;
+}
+.path-details {
+  min-height: 0;
+}
+@media (max-width: 1023px) {
+  .path-details-scroll [data-slot="scroll-area-viewport"] {
+    height: auto;
+  }
+}
+@media (min-width: 1024px) {
+  .path-layout {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+    overflow: hidden;
+  }
+  .path-details-scroll {
+    height: 100%;
+  }
+  .path-replay {
+    height: 100%;
+    min-height: 0;
+  }
+}
+@media (min-width: 640px) and (max-height: 600px) {
+  .path-replay {
+    min-height: 280px;
+  }
+  .path-replay-content {
+    max-width: 960px;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: clamp(16px, 3vw, 40px);
+  }
+  .path-board-space {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+  .path-step {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .path-controls {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
