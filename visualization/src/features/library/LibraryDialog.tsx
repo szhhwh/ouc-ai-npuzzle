@@ -2,7 +2,7 @@ import NumberFlow from "@number-flow/react";
 import type { OnChangeFn, RowSelectionState } from "@tanstack/react-table";
 import { FileUp, LibraryBig, LoaderCircle, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useImportPicker } from "@/app/import-context";
 import { setLibraryOpen, useUi } from "@/app/ui-store";
 import {
@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ensurePreviews, removeRecords, useLibrary } from "@/data/library";
+import { removeRecords, useLibrary } from "@/data/library";
 import type { RecordMeta } from "@/data/types";
 import { formatBytes } from "@/lib/labels";
 import { RENAME_ATTRIBUTE } from "./NameCell";
@@ -35,10 +35,6 @@ function pruneSelection(selection: RowSelectionState, metas: RecordMeta[]) {
 
 export function LibraryDialog() {
   const open = useUi((state) => state.libraryOpen);
-
-  useEffect(() => {
-    if (open) ensurePreviews().catch(() => {});
-  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={setLibraryOpen}>
