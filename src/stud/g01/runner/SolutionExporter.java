@@ -1,10 +1,9 @@
 package stud.g01.runner;
 
-import core.solver.algorithm.heuristic.HeuristicType;
+import static stud.g01.runner.SearchTraceJsonWriter.quote;
+
 import core.solver.algorithm.heuristic.Predictor;
 import core.solver.algorithm.searcher.AbstractSearcher;
-import core.solver.algorithm.searcher.BestFirstSearcher;
-import core.solver.queue.EvaluationType;
 import core.solver.queue.Node;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -20,11 +19,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import stud.g01.problem.npuzzle.NPuzzleIdaStar;
 import stud.g01.problem.npuzzle.NPuzzleProblem;
 import stud.g01.problem.npuzzle.PuzzleBoard;
-import stud.queue.StackFrontier;
-import stud.solver.IdAStar;
+import stud.g01.problem.npuzzle.PuzzleHeuristicType;
 
 /** One actual Java search exports both its complete process and its solution. */
 public final class SolutionExporter {
@@ -35,10 +32,9 @@ public final class SolutionExporter {
             throw new IllegalArgumentException(
                     "用法: SolutionExporter input output.json astar|ida|nida|dijkstra ZERO,MANHATTAN,MISPLACED,DISJOINT_PATTERN [--allow-pdb]");
         }
-        String engine = args[2].toLowerCase(Locale.ROOT);
-        if (!List.of("astar", "ida", "nida", "dijkstra").contains(engine)) {
-            throw new IllegalArgumentException("未知搜索引擎: " + args[2]);
-        }
+        PuzzleFeeder feeder = new PuzzleFeeder();
+        String engine = feeder.validateEngine(args[2]);
+        algorithmName(engine);
         boolean allowPdb = args.length == 5 && args[4].equals("--allow-pdb");
         if (args.length == 5 && !allowPdb) {
             throw new IllegalArgumentException("未知选项（不再支持预热或重复测量）: " + args[4]);
@@ -51,8 +47,7 @@ public final class SolutionExporter {
         if (Files.exists(output)) {
             throw new IllegalArgumentException("输出已存在，请选择新文件，避免覆盖实验");
         }
-        List<HeuristicType> kinds = parseHeuristics(args[3], allowPdb);
-        PuzzleFeeder feeder = new PuzzleFeeder();
+        List<PuzzleHeuristicType> kinds = parseHeuristics(args[3], allowPdb);
         Path temporary =
                 Files.createTempFile(
                         Objects.requireNonNull(output.getParent()), ".npuzzle-export-", ".tmp");
@@ -60,7 +55,7 @@ public final class SolutionExporter {
             try (BufferedReader reader = Files.newBufferedReader(input, StandardCharsets.UTF_8);
                     BufferedWriter out =
                             Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
-                out.write("{\"schemaVersion\":2,\"results\":[");
+                out.write("{\"schemaVersion\":3,\"results\":[");
                 int index = 0;
                 boolean first = true;
                 String line;
@@ -72,10 +67,10 @@ public final class SolutionExporter {
                                     feeder.getProblems(new ArrayList<>(List.of(line))).getFirst();
                     index++;
                     if (!problem.solvable()) throw new IllegalArgumentException("实例不可解: " + index);
-                    for (HeuristicType kind : kinds) {
+                    for (PuzzleHeuristicType kind : kinds) {
                         SearchTrace trace = new SearchTrace();
-                        AbstractSearcher searcher =
-                                recordedSearcher(feeder, engine, kind, problem, trace);
+                        Predictor predictor = feeder.getPredictor(kind);
+                        AbstractSearcher searcher = feeder.getSearcher(engine, predictor, trace);
                         long start = System.nanoTime();
                         Deque<Node> path = searcher.search(problem);
                         double millis = (System.nanoTime() - start) / 1_000_000.0;
@@ -102,87 +97,55 @@ public final class SolutionExporter {
         }
     }
 
-    private static List<HeuristicType> parseHeuristics(String names, boolean allowPdb) {
-        LinkedHashSet<HeuristicType> kinds = new LinkedHashSet<>();
+    private static List<PuzzleHeuristicType> parseHeuristics(String names, boolean allowPdb) {
+        LinkedHashSet<PuzzleHeuristicType> kinds = new LinkedHashSet<>();
         for (String name : names.split(",", -1)) {
-            HeuristicType kind;
+            PuzzleHeuristicType kind;
             try {
-                kind = HeuristicType.valueOf(name.trim().toUpperCase(Locale.ROOT));
+                kind = PuzzleHeuristicType.valueOf(name.trim().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException exception) {
                 throw new IllegalArgumentException("不支持的 N-Puzzle 启发函数: " + name, exception);
             }
-            if (kind != HeuristicType.MANHATTAN
-                    && kind != HeuristicType.MISPLACED
-                    && kind != HeuristicType.DISJOINT_PATTERN
-                    && kind != HeuristicType.ZERO) {
-                throw new IllegalArgumentException("不支持的 N-Puzzle 启发函数: " + kind);
-            }
             if (!kinds.add(kind)) throw new IllegalArgumentException("重复启发函数: " + kind);
         }
-        if (kinds.contains(HeuristicType.DISJOINT_PATTERN) && !allowPdb) {
+        if (kinds.contains(PuzzleHeuristicType.DISJOINT_PATTERN) && !allowPdb) {
             throw new IllegalArgumentException("PDB 可能占用大量内存和时间，请显式传入 --allow-pdb");
         }
-        if (allowPdb && !kinds.contains(HeuristicType.DISJOINT_PATTERN)) {
+        if (allowPdb && !kinds.contains(PuzzleHeuristicType.DISJOINT_PATTERN)) {
             throw new IllegalArgumentException("--allow-pdb 需要 DISJOINT_PATTERN 启发函数");
         }
         return List.copyOf(kinds);
-    }
-
-    private static AbstractSearcher recordedSearcher(
-            PuzzleFeeder feeder,
-            String engine,
-            HeuristicType kind,
-            NPuzzleProblem problem,
-            SearchTrace trace) {
-        Predictor predictor = feeder.getPredictor(kind);
-        if (engine.equals("nida")) {
-            return new NPuzzleIdaStar(predictor, trace);
-        }
-        if (engine.equals("ida")) {
-            return new IdAStar(new StackFrontier(), predictor, trace);
-        }
-        SearchTrace.BestFirstObservation observation =
-                trace
-                .new BestFirstObservation(
-                        predictor,
-                        problem.goalBoard(),
-                        engine.equals("dijkstra") ? EvaluationType.PATH_COST : EvaluationType.FULL);
-        return new BestFirstSearcher(observation, observation);
     }
 
     private static void writeRecord(
             BufferedWriter out,
             Path input,
             String engine,
-            HeuristicType kind,
+            PuzzleHeuristicType kind,
             NPuzzleProblem problem,
             AbstractSearcher searcher,
             double millis,
             List<byte[]> states,
             SearchTrace trace)
             throws IOException {
-        String algorithm =
-                switch (engine) {
-                    case "ida" -> "IDA*";
-                    case "nida" -> "NIDA*";
-                    case "dijkstra" -> "Dijkstra";
-                    default -> "A*";
-                };
+        String algorithm = algorithmName(engine);
         String environment =
                 System.getProperty("java.version")
                         + " / "
                         + System.getProperty("os.name")
                         + " / "
                         + System.getProperty("os.arch");
+        String revision = System.getProperty("npuzzle.revision");
         out.write(
-                "{\"name\":\"Untitled Problem\",\"algorithm\":"
+                "{\"algorithm\":"
                         + quote(algorithm)
                         + ",\"heuristic\":"
                         + quote(kind.name())
                         + ",\"source\":\"Java\",\"sourceFile\":"
                         + quote(Objects.requireNonNull(input.getFileName()).toString())
-                        + ",\"sourceRevision\":"
-                        + quote(System.getProperty("npuzzle.revision", "unknown"))
+                        + (revision == null || revision.isBlank()
+                                ? ""
+                                : ",\"sourceRevision\":" + quote(revision))
                         + ",\"environment\":"
                         + quote(environment)
                         + ",\"exportedAt\":"
@@ -201,8 +164,18 @@ public final class SolutionExporter {
             out.write(Arrays.toString(states.get(i)));
         }
         out.write("],\"trace\":");
-        trace.writeJson(out);
+        SearchTraceJsonWriter.write(out, trace);
         out.write('}');
+    }
+
+    static String algorithmName(String engine) {
+        return switch (engine) {
+            case "astar" -> "A*";
+            case "ida" -> "IDA*";
+            case "nida" -> "NIDA*";
+            case "dijkstra" -> "Dijkstra";
+            default -> throw new IllegalArgumentException("导出格式不支持搜索引擎: " + engine);
+        };
     }
 
     private static void validateInput(String line) {
@@ -256,16 +229,5 @@ public final class SolutionExporter {
                 throw new IllegalStateException("非法棋盘变化");
             }
         }
-    }
-
-    static String quote(String value) {
-        StringBuilder result = new StringBuilder("\"");
-        for (char c : value.toCharArray()) {
-            if (c == '\\' || c == '"') result.append('\\').append(c);
-            else if (c < 32 || c == '<' || c == '\u2028' || c == '\u2029') {
-                result.append(String.format(Locale.ROOT, "\\u%04x", (int) c));
-            } else result.append(c);
-        }
-        return result.append('"').toString();
     }
 }

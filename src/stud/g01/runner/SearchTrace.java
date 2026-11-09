@@ -1,43 +1,44 @@
 package stud.g01.runner;
 
 import core.problem.State;
-import core.solver.algorithm.heuristic.Predictor;
-import core.solver.queue.EvaluationType;
-import core.solver.queue.Frontier;
+import core.solver.algorithm.searcher.SearchObserver;
 import core.solver.queue.Node;
-import java.io.IOException;
-import java.io.Writer;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import stud.g01.problem.npuzzle.NPuzzleIdaStar;
 import stud.g01.problem.npuzzle.PuzzleBoard;
-import stud.queue.PqFrontier;
-import stud.solver.IdAStar;
 
-/** Export-only observations; the search engines retain their own ordering and counters. */
-final class SearchTrace implements IdAStar.Observer, NPuzzleIdaStar.Observer {
-    private static final class Entry {
+/** Collects actual search observations; JSON projection belongs to the writer. */
+final class SearchTrace implements SearchObserver {
+    static final class Entry {
         final int id, parent, g, h;
         final byte[] board;
+        final HeuristicQuality quality;
         String status;
         Integer reference;
         Frame frame;
 
-        Entry(int id, int parent, byte[] board, int g, int h, String status) {
+        Entry(
+                int id,
+                int parent,
+                byte[] board,
+                int g,
+                int h,
+                String status,
+                HeuristicQuality quality) {
             this.id = id;
             this.parent = parent;
             this.board = board;
             this.g = g;
             this.h = h;
             this.status = status;
+            this.quality = quality;
         }
     }
 
-    private static final class Frame {
+    static final class Frame {
         final int current, bound, iteration;
         final boolean found;
         final List<Integer> children = new ArrayList<>();
@@ -53,30 +54,19 @@ final class SearchTrace implements IdAStar.Observer, NPuzzleIdaStar.Observer {
     private final List<Entry> nodes = new ArrayList<>();
     private final List<Frame> frames = new ArrayList<>();
     private final IdentityHashMap<Node, Integer> identities = new IdentityHashMap<>();
+    private final Map<State, Node> accepted = new HashMap<>();
+    private final Map<State, Integer> closed = new HashMap<>();
     private int finalGoal = -1;
 
-    @Override
-    public int root(byte[] board, int h, int bound, int iteration) {
-        return add(-1, board.clone(), 0, h, "frontier");
-    }
-
-    private int add(int parent, byte[] board, int g, int h, String status) {
+    private int add(
+            int parent, byte[] board, int g, int h, String status, HeuristicQuality quality) {
         int id = nodes.size();
-        nodes.add(new Entry(id, parent, board, g, h, status));
+        nodes.add(new Entry(id, parent, board, g, h, status, quality));
         if (parent >= 0) nodes.get(parent).frame.children.add(id);
         return id;
     }
 
-    @Override
-    public int child(int parent, byte[] board, int blank, int target, int g, int h, String status) {
-        byte[] copy = board.clone();
-        copy[blank] = copy[target];
-        copy[target] = 0;
-        return add(parent, copy, g, h, status);
-    }
-
-    @Override
-    public void visit(int id, boolean found, int bound, int iteration) {
+    private void visit(int id, boolean found, int bound, int iteration) {
         Frame frame = new Frame(id, found, bound, iteration);
         nodes.get(id).frame = frame;
         frames.add(frame);
@@ -84,141 +74,68 @@ final class SearchTrace implements IdAStar.Observer, NPuzzleIdaStar.Observer {
     }
 
     @Override
-    public void prune(int id, String status) {
-        nodes.get(id).status = status;
-    }
-
-    @Override
     public void iteration(Node root, int bound, int iteration) {
         identities.clear();
+        accepted.clear();
+        closed.clear();
         identities.put(
                 root,
-                root(
+                add(
+                        -1,
                         ((PuzzleBoard) root.getState()).cells(),
+                        0,
                         root.getHeuristic(),
-                        bound,
-                        iteration));
+                        "frontier",
+                        HeuristicQuality.EXACT));
+        accepted.put(root.getState(), root);
     }
 
     @Override
     public void visit(Node node, boolean found, int bound, int iteration) {
-        visit(identities.get(node), found, bound, iteration);
+        int id = identities.get(node);
+        visit(id, found, bound, iteration);
+        accepted.remove(node.getState());
+        if (!found) closed.put(node.getState(), id);
     }
 
     @Override
-    public void generated(Node parent, List<Node> children, Predictor predictor, State goal) {
-        int parentId = identities.get(parent);
-        for (Node child : children) {
-            int h = predictor.heuristics(child.getState(), goal);
-            identities.put(
-                    child,
-                    add(
-                            parentId,
-                            ((PuzzleBoard) child.getState()).cells(),
-                            child.getPathCost(),
-                            h,
-                            "frontier"));
-        }
+    public void generated(Node child, HeuristicQuality quality) {
+        identities.put(
+                child,
+                add(
+                        identities.get(child.getParent()),
+                        ((PuzzleBoard) child.getState()).cells(),
+                        child.getPathCost(),
+                        child.getHeuristic(),
+                        "frontier",
+                        quality));
     }
 
     @Override
-    public void prune(Node node, String status) {
-        prune(identities.get(node), status);
+    public void offered(Node node, boolean offered) {
+        Entry entry = nodes.get(identities.get(node));
+        Node previous = accepted.get(node.getState());
+        if (previous != null) {
+            entry.status = offered ? "replaced" : "frontier-pruned";
+            entry.reference = identities.get(previous);
+        }
+        if (offered) accepted.put(node.getState(), node);
     }
 
-    /** The teacher searcher calls the predictor for every child before offering any child. */
-    final class BestFirstObservation implements Frontier, Predictor {
-        private final Predictor predictor;
-        private final PuzzleBoard goal;
-        private final Comparator<Node> comparator;
-        private final Frontier frontier;
-        private final Map<State, Node> accepted = new HashMap<>();
-        private final Map<State, Integer> closed = new HashMap<>();
-        private final IdentityHashMap<State, Integer> generated = new IdentityHashMap<>();
-        private Node current;
-        private int rootId;
+    @Override
+    public void prune(Node node, SearchObserver.Pruning reason) {
+        Entry entry = nodes.get(identities.get(node));
+        entry.status = status(reason);
+        if (reason == SearchObserver.Pruning.CLOSED) entry.reference = closed.get(node.getState());
+    }
 
-        BestFirstObservation(Predictor predictor, PuzzleBoard goal, EvaluationType evaluation) {
-            this.predictor = predictor;
-            this.goal = goal;
-            comparator = Node.evaluator(evaluation);
-            frontier = new PqFrontier(comparator);
-        }
-
-        @Override
-        public int heuristics(State state, State target) {
-            int h = predictor.heuristics(state, target);
-            int id;
-            if (current == null) {
-                id = root(((PuzzleBoard) state).cells(), h, -1, 0);
-                rootId = id;
-            } else {
-                Integer reference = closed.get(state);
-                id =
-                        add(
-                                identities.get(current),
-                                ((PuzzleBoard) state).cells(),
-                                current.getPathCost() + 1,
-                                h,
-                                reference == null ? "frontier" : "closed-pruned");
-                nodes.get(id).reference = reference;
-            }
-            generated.put(state, id);
-            return h;
-        }
-
-        @Override
-        public boolean offer(Node node) {
-            int id = node.getParent() == null ? rootId : generated.get(node.getState());
-            identities.put(node, id);
-            Node previous = accepted.get(node.getState());
-            boolean offered = frontier.offer(node);
-            if (previous != null) {
-                Entry entry = nodes.get(id);
-                entry.status = offered ? "replaced" : "frontier-pruned";
-                entry.reference = identities.get(previous);
-            }
-            if (offered) accepted.put(node.getState(), node);
-            return offered;
-        }
-
-        @Override
-        public Node poll() {
-            current = frontier.poll();
-            if (current != null) {
-                accepted.remove(current.getState());
-                int id = identities.get(current);
-                boolean found = current.getState().equals(goal);
-                visit(id, found, -1, 0);
-                if (!found) closed.put(current.getState(), id);
-                generated.clear();
-            }
-            return current;
-        }
-
-        @Override
-        public void clear() {
-            frontier.clear();
-            accepted.clear();
-            closed.clear();
-            generated.clear();
-            current = null;
-        }
-
-        @Override
-        public int size() {
-            return frontier.size();
-        }
-
-        @Override
-        public boolean isEmpty() {
-            return frontier.isEmpty();
-        }
-
-        @Override
-        public boolean contains(Node node) {
-            return frontier.contains(node);
-        }
+    private static String status(Pruning reason) {
+        return switch (reason) {
+            case CLOSED -> "closed-pruned";
+            case CYCLE -> "cycle-pruned";
+            case BOUND -> "bound-pruned";
+            case TRANSPOSITION -> "transposition-pruned";
+        };
     }
 
     List<byte[]> solution() {
@@ -228,11 +145,19 @@ final class SearchTrace implements IdAStar.Observer, NPuzzleIdaStar.Observer {
         return boards;
     }
 
-    private List<Integer> solutionIds() {
+    List<Integer> solutionIds() {
         List<Integer> result = new ArrayList<>();
         for (int id = finalGoal; id >= 0; id = nodes.get(id).parent) result.add(id);
         java.util.Collections.reverse(result);
         return result;
+    }
+
+    List<Entry> entries() {
+        return nodes;
+    }
+
+    List<Frame> frames() {
+        return frames;
     }
 
     void validateCounts(int generated, int expanded) {
@@ -243,47 +168,5 @@ final class SearchTrace implements IdAStar.Observer, NPuzzleIdaStar.Observer {
                 || !frames.getLast().found) {
             throw new IllegalStateException("搜索计数与完整过程不一致");
         }
-    }
-
-    void writeJson(Writer out) throws IOException {
-        out.write("{\"complete\":true,\"nodes\":[");
-        for (Entry node : nodes) {
-            if (node.id > 0) out.write(',');
-            out.write(
-                    "{\"id\":"
-                            + node.id
-                            + ",\"parent\":"
-                            + (node.parent < 0 ? "null" : node.parent)
-                            + ",\"board\":"
-                            + java.util.Arrays.toString(node.board)
-                            + ",\"g\":"
-                            + node.g
-                            + ",\"h\":"
-                            + node.h
-                            + ",\"f\":"
-                            + (node.g + node.h)
-                            + ",\"status\":"
-                            + SolutionExporter.quote(node.status));
-            if (node.reference != null) out.write(",\"reference\":" + node.reference);
-            out.write('}');
-        }
-        out.write("],\"frames\":[");
-        boolean first = true;
-        for (Frame frame : frames) {
-            if (!first) out.write(',');
-            first = false;
-            out.write(
-                    "{\"current\":"
-                            + frame.current
-                            + ",\"children\":"
-                            + frame.children
-                            + ",\"found\":"
-                            + frame.found
-                            + ",\"iteration\":"
-                            + frame.iteration);
-            if (frame.bound >= 0) out.write(",\"bound\":" + frame.bound);
-            out.write('}');
-        }
-        out.write("],\"solution\":" + solutionIds() + "}");
     }
 }
