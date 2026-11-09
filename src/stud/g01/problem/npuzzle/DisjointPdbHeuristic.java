@@ -7,31 +7,41 @@ import java.util.BitSet;
 import java.util.Map;
 import java.util.Objects;
 
-/** 可加模式数据库（additive pattern database，PDB）启发函数。 */
+/** 互不相交模式数据库启发函数。 */
 public final class DisjointPdbHeuristic {
 
-    /** Small product tables are retained for 3 x 3; 4 x 4 uses ranked storage. */
+    /** 3 阶棋盘的 3-3-2 分组定义 */
     private static final Map<Integer, int[][]> GROUPINGS =
             Map.of(3, new int[][] {{1, 2, 3}, {4, 5, 6}, {7, 8}});
 
+    /** 私有构造方法，防止工具类被实例化。 */
     private DisjointPdbHeuristic() {}
 
     /**
-     * 返回带对称增强的启发函数。表按目标盘面懒构建并缓存。
+     * 返回带对称增强的启发函数，表按目标盘面懒构建并缓存。
      *
-     * @return 启发函数
+     * @return 启发函数预测器
      */
     public static Predictor predictor() {
         return predictor(PdbOptions.fromSystemProperties());
     }
 
-    /** 普通搜索逐次完整查表；仅 symmetry 选项影响启发值。 */
+    /**
+     * 根据选项返回启发函数预测器。
+     *
+     * @param options 模式数据库配置选项
+     * @return 启发函数预测器
+     */
     public static Predictor predictor(PdbOptions options) {
         return predictor(options, PdbRepository.defaultRepository());
     }
 
     /**
-     * Explicit cache ownership; options and directory are captured without eagerly building PDBs.
+     * 根据选项和指定的仓库返回启发函数预测器。
+     *
+     * @param options 模式数据库配置选项
+     * @param repository 模式数据库仓库
+     * @return 启发函数预测器
      */
     public static Predictor predictor(PdbOptions options, PdbRepository repository) {
         Objects.requireNonNull(options, "options");
@@ -61,34 +71,41 @@ public final class DisjointPdbHeuristic {
                                     initial, repository.componentTables(goal), options);
                     default ->
                             throw new UnsupportedOperationException(
-                                    initial.size() + " 阶未定义 PDB（仅支持 3/4 阶）");
+                                    initial.size() + " 阶未定义模式数据库，仅支持 3 阶与 4 阶");
                 };
             }
         };
     }
 
-    /** The actual table strategy differs between ordinary and optimized 4 x 4 search. */
+    /** 模式数据库策略变体枚举 */
     public enum Variant {
         PRODUCT_3_3_2,
         DIRECT_6_6_3,
         COMPONENT_7_8
     }
 
+    /**
+     * 根据棋盘规模和搜索模式确定采用的模式数据库策略变体。
+     *
+     * @param size 棋盘边长
+     * @param optimizedSearch 是否为专用优化搜索
+     * @return 对应的策略变体
+     */
     public static Variant variant(int size, boolean optimizedSearch) {
         return switch (size) {
             case 3 -> Variant.PRODUCT_3_3_2;
             case 4 -> optimizedSearch ? Variant.COMPONENT_7_8 : Variant.DIRECT_6_6_3;
-            default -> throw new UnsupportedOperationException(size + " 阶未定义 PDB（仅支持 3/4 阶）");
+            default -> throw new UnsupportedOperationException(size + " 阶未定义模式数据库，仅支持 3 阶与 4 阶");
         };
     }
 
-    /** 某个目标盘面对应的全部分组距离表和查询逻辑。字段在构建后只读，线程安全 */
+    /** 某个目标盘面对应的全部分组距离表和查询逻辑，构建后只读且线程安全 */
     static final class Tables {
 
         /** 棋盘边长 */
         final int size;
 
-        /** 格子总数，等于 size 的平方 */
+        /** 格子总数，等于边长的平方 */
         final int cells;
 
         /** 分组定义，每组是若干互不相交的数字 */
@@ -97,23 +114,32 @@ public final class DisjointPdbHeuristic {
         /** 与 groups 一一对应的距离表 */
         final byte[][] tables;
 
-        /** goal 盘面原文，用于构造对称置换和校验磁盘缓存 */
+        /** 目标盘面数字数组原文，用于构造对称置换和校验磁盘缓存 */
         final byte[] goalCells;
 
-        /** goalPos[v] 是数字 v 在 goal 盘面上的位置 */
+        /** 目标盘面中各数字所在的格子下标数组 */
         private final int[] goalPos;
 
-        /** transpose[i] 是格子 i 沿主对角线翻转后的位置 */
+        /** 各格子沿主对角线转置后的对应格子下标数组 */
         final int[] transpose;
 
-        /** 数字的对称置换 symPerm，symPerm[v] = goal[transpose[goalPos[v]]] */
+        /** 数字的对称置换映射数组 */
         final int[] symPerm;
 
-        /** 对称增强是否可用，即 goal 的空格是否在主对角线上 */
+        /** 对称增强是否可用，即目标盘面的空格是否在主对角线上 */
         final boolean symmetric;
 
+        /** 数字所属分组编号、乘积寻址位权、对称分组编号以及对称位权数组 */
         final int[] tileGroup, tileWeight, mirroredGroup, mirroredWeight;
 
+        /**
+         * 初始化全部分组查找表。
+         *
+         * @param size 棋盘边长
+         * @param groups 分组数组
+         * @param tables 距离表数组
+         * @param goalCells 目标盘面数组
+         */
         private Tables(int size, int[][] groups, byte[][] tables, byte[] goalCells) {
             this.size = size;
             this.cells = size * size;
@@ -125,8 +151,6 @@ public final class DisjointPdbHeuristic {
                 goalPos[goalCells[i]] = i;
             }
 
-            // 构造转置表和数字置换。只有 goal 的空格在主对角线上时，对称态的空格位置才等于
-            // 转置后的空格位置，查表才有效，否则禁用对称增强。标准目标的空格在右下角，满足条件。
             this.transpose = new int[cells];
             for (int i = 0; i < cells; i++) {
                 transpose[i] = (i % size) * size + i / size;
@@ -155,7 +179,13 @@ public final class DisjointPdbHeuristic {
             }
         }
 
-        /** 为 goal 构建整套表。逐组先查磁盘缓存，未命中则用 0-1 BFS 重建并写盘 */
+        /**
+         * 为目标盘面构建整套表，逐组先查磁盘缓存，未命中则通过 0-1 广度优先搜索重建并写盘。
+         *
+         * @param goal 目标盘面
+         * @param repository 模式数据库仓库
+         * @return 构建好的 Tables 实例
+         */
         static Tables build(PuzzleBoard goal, PdbRepository repository) {
             int size = goal.size();
             int[][] groups = GROUPINGS.get(size);
@@ -169,7 +199,13 @@ public final class DisjointPdbHeuristic {
             return new Tables(size, groups, ts, goal.cellsInternal().clone());
         }
 
-        /** 对称增强查询，取直接查表和与对称态查表中的较大值；不满足对称条件时退化为直接查询 */
+        /**
+         * 对称增强查询，取直接查表和对称态查表中的较大值。
+         *
+         * @param state 当前盘面
+         * @param useSymmetry 是否使用对称性
+         * @return 启发值
+         */
         int hMax(PuzzleBoard state, boolean useSymmetry) {
             long positions = state.positions();
             int direct = hPositions(positions, state.blank(), false);
@@ -178,6 +214,14 @@ public final class DisjointPdbHeuristic {
             return Math.max(direct, mirrored);
         }
 
+        /**
+         * 查表计算指定逆位置编码和空格位置的启发总值。
+         *
+         * @param positions 逆位置编码
+         * @param blank 空格位置
+         * @param mirrored 是否为对称网格
+         * @return 累加的启发值
+         */
         int hPositions(long positions, int blank, boolean mirrored) {
             int sum = 0;
             for (int g = 0; g < groups.length; g++) {
@@ -194,11 +238,13 @@ public final class DisjointPdbHeuristic {
     }
 
     /**
-     * 取某一组的距离表，磁盘缓存有效就读入，否则 0-1 BFS 重建并写盘。
+     * 取某一组的距离表，磁盘缓存有效就读入，否则通过 0-1 广度优先搜索重建并写盘。
      *
      * @param size 棋盘边长
-     * @param goalCells 目标盘面，行主序，0 表示空格
-     * @param tiles 该组的数字
+     * @param goalCells 目标盘面数组
+     * @param tiles 该组的数字列表
+     * @param repository 模式数据库仓库
+     * @return 距离表字节数组
      */
     static byte[] loadOrBuildGroup(
             int size, byte[] goalCells, int[] tiles, PdbRepository repository) {
@@ -213,7 +259,7 @@ public final class DisjointPdbHeuristic {
                 };
         byte[] cached = cache.tryLoad(reader);
         if (cached != null) {
-            System.out.println("[PDB] " + cache.file + " 缓存命中（" + cached.length + " 项）");
+            System.out.println("[PDB] " + cache.file + " 缓存命中");
             return cached;
         }
         long t0 = System.currentTimeMillis();
@@ -221,9 +267,7 @@ public final class DisjointPdbHeuristic {
         System.out.println(
                 "[PDB] "
                         + cache.file
-                        + " 缓存未命中或校验失败，0-1 BFS 重建完成："
-                        + built.length
-                        + " 项，耗时 "
+                        + " 缓存未命中或校验失败，0-1 广度优先搜索重建完成，耗时 "
                         + (System.currentTimeMillis() - t0)
                         + " ms");
         cache.tryWrite(
@@ -236,7 +280,7 @@ public final class DisjointPdbHeuristic {
     }
 
     /**
-     * 用多源倒向 0-1 BFS 构建某一组的距离表。
+     * 用多源倒向 0-1 广度优先搜索构建某一组的距离表。
      *
      * @param size 棋盘边长
      * @param goalCells 目标盘面
@@ -247,16 +291,15 @@ public final class DisjointPdbHeuristic {
         final int cells = size * size;
         final int D = tiles.length;
 
-        // w[j] 是第 j 个数字的位权，即 cells^(D-j)，空格那一位的权重恒为 1
+        // 位权 w[j] = cells^(D-j)，把 D 个数字位置与空格位置编码成一个整数索引
         final int[] w = new int[D];
         for (int j = 0; j < D; j++) {
             w[j] = pow(cells, D - j);
         }
         final int total = pow(cells, D + 1);
         byte[] dist = new byte[total];
-        Arrays.fill(dist, (byte) 0xFF); // 0xFF 表示未访问
+        Arrays.fill(dist, (byte) 0xFF);
 
-        // tp[j] 是第 j 个数字在目标盘面上的位置
         final int[] tp = new int[D];
         for (int i = 0; i < cells; i++) {
             for (int j = 0; j < D; j++) {
@@ -264,15 +307,14 @@ public final class DisjointPdbHeuristic {
             }
         }
 
-        // 预先算好各格子的四邻，热循环里就不用做边界判断
         final int[][] nbr = PuzzleNeighbors.forSize(size);
 
-        // 起点是组内数字全部就位、空格在任意其余格子的所有配置，都以 dist=0 入队
         IntDeque deque = new IntDeque(1 << 12);
         int tilesIdx = 0;
         for (int j = 0; j < D; j++) {
             tilesIdx += tp[j] * w[j];
         }
+        // 多源起点：模式数字全部就位，空格位于任意非模式格子，距离均为 0
         for (int b = 0; b < cells; b++) {
             boolean occupied = false;
             for (int p : tp) {
@@ -281,30 +323,30 @@ public final class DisjointPdbHeuristic {
                     break;
                 }
             }
-            if (occupied) continue; // 空格不能和组内数字同格
+            if (occupied) continue;
             dist[tilesIdx + b] = 0;
             deque.addLast(tilesIdx + b);
         }
 
-        // 0-1 BFS 主体，settled 记录已确定的项，防止队列里的旧项被重复展开
         BitSet settled = new BitSet(total);
-        int[] p = new int[D]; // 出队状态里各数字的位置，复用同一个数组避免反复分配
+        int[] p = new int[D];
 
+        // 0-1 广度优先搜索：代价 0 的空格滑动入队首，代价 1 的模式数字换位入队尾
         while (!deque.isEmpty()) {
             int idx = deque.pollFirst();
             if (settled.get(idx)) continue;
             settled.set(idx);
 
             int d = dist[idx] & 0xFF;
-            int b = idx % cells; // 最低位是空格位置
+            int b = idx % cells;
             int rest = idx / cells;
-            for (int j = D - 1; j >= 0; j--) { // 由低位到高位解出各数字的位置
+            // 由低位到高位解包出模式数字当前位置
+            for (int j = D - 1; j >= 0; j--) {
                 p[j] = rest % cells;
                 rest /= cells;
             }
 
-            for (int t : nbr[b]) { // 空格与邻格 t 交换
-                // 看 t 处是不是组内数字，是就记下它的下标 ti
+            for (int t : nbr[b]) {
                 int ti = -1;
                 for (int j = 0; j < D; j++) {
                     if (p[j] == t) {
@@ -314,52 +356,84 @@ public final class DisjointPdbHeuristic {
                 }
                 int nIdx, cost;
                 if (ti >= 0) {
-                    // 组内数字 ti 从 t 移到 b、空格从 b 移到 t，下标增量为 (b-t)*(w[ti]-1)
+                    // 模式数字由 t 移到 b，空格反向移到 t
                     nIdx = idx + (b - t) * (w[ti] - 1);
                     cost = 1;
                 } else {
-                    // 无关数字，抽象上只动了空格，代价为 0
+                    // 空格与普通数字交换，模式数字位置不变，代价为 0
                     nIdx = idx - b + t;
                     cost = 0;
                 }
                 int nd = d + cost;
                 if ((dist[nIdx] & 0xFF) > nd) {
                     dist[nIdx] = (byte) nd;
-                    if (cost == 0) deque.addFirst(nIdx); // 0 代价走队首
-                    else deque.addLast(nIdx); // 1 代价走队尾
+                    if (cost == 0) deque.addFirst(nIdx);
+                    else deque.addLast(nIdx);
                 }
             }
         }
         return dist;
     }
 
-    /** 求 base 的非负整数次幂 */
+    /**
+     * 求整数的非负整数次幂。
+     *
+     * @param base 底数
+     * @param exp 指数
+     * @return 幂运算结果
+     */
     private static int pow(int base, int exp) {
         int r = 1;
         for (int i = 0; i < exp; i++) r *= base;
         return r;
     }
 
-    /** 某组距离表的项数，即 cells^(组内数字个数+1) */
+    /**
+     * 计算某组距离表的项数。
+     *
+     * @param size 棋盘边长
+     * @param tiles 组内数字个数
+     * @return 状态总项数
+     */
     private static int tableLength(int size, int tiles) {
         return pow(size * size, tiles + 1);
     }
 
-    /** 可增长的循环数组 int 双端队列，供 0-1 BFS 使用，避免 Integer 装箱 */
+    /** 可增长的循环数组基本类型整型双端队列，供 0-1 广度优先搜索使用，消除装箱开销。 */
     private static final class IntDeque {
-        private int[] buf; // 循环缓冲区
-        private int head = 0; // 队首下标
-        private int len = 0; // 当前元素个数
+        /** 环形缓冲区数组 */
+        private int[] buf;
 
+        /** 队首元素下标 */
+        private int head = 0;
+
+        /** 队列当前元素数量 */
+        private int len = 0;
+
+        /**
+         * 构造指定预期容量的双端队列。
+         *
+         * @param expectedCapacity 预期容量
+         */
         IntDeque(int expectedCapacity) {
             int cap = Math.max(16, Integer.highestOneBit(expectedCapacity - 1) << 1);
             buf = new int[cap];
         }
 
+        /**
+         * 判断队列是否为空。
+         *
+         * @return 为空返回 true，否则返回 false
+         */
         boolean isEmpty() {
             return len == 0;
         }
 
+        /**
+         * 向队首插入一个整数元素。
+         *
+         * @param v 待插入的整数
+         */
         void addFirst(int v) {
             ensureCapacity();
             head = (head - 1 + buf.length) % buf.length;
@@ -367,12 +441,22 @@ public final class DisjointPdbHeuristic {
             len++;
         }
 
+        /**
+         * 向队尾追加一个整数元素。
+         *
+         * @param v 待追加的整数
+         */
         void addLast(int v) {
             ensureCapacity();
             buf[(head + len) % buf.length] = v;
             len++;
         }
 
+        /**
+         * 从队首弹出一个整数元素。
+         *
+         * @return 出队的整数
+         */
         int pollFirst() {
             int v = buf[head];
             head = (head + 1) % buf.length;
@@ -380,6 +464,7 @@ public final class DisjointPdbHeuristic {
             return v;
         }
 
+        /** 检查并在队列已满时执行成倍扩容。 */
         private void ensureCapacity() {
             if (len < buf.length) return;
             int[] nb = new int[buf.length << 1];
