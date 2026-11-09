@@ -36,7 +36,7 @@
 ### ⚡ 核心求解算法与工程优化
 - **全算法矩阵覆盖**：原生集成 A*、IDA*、Dijkstra 引擎，并提供针对 N-Puzzle 深度优化的专用引擎 `nida`。
 - **阶梯式启发函数（Admissible Heuristics）**：
-  - `ZERO`：零估计（退化为一致代价搜索 / Dijkstra）
+  - `ZERO`：零估计（不使用启发信息，退化为一致代价搜索 / Dijkstra）
   - `MISPLACED`：不在位将牌数启发式
   - `MANHATTAN`：基于预计算距离表的常数级曼哈顿距离
   - `DISJOINT_PATTERN`：可加模式数据库（PDB），支持 8 数码（3-3-2 分组）与 15 数码（6-6-3 排名编码 / 7-8 连通分量编码）
@@ -49,6 +49,7 @@
 ### 🎨 现代化交互式搜索可视化
 - **解路径回放视图（Path Replay）**：
   - 平滑滑块移动与方向指示。
+  - 自适应响应式布局：棋盘与详情自适应排版缩放，流畅适配宽屏桌面与移动设备。
   - 解路径启发值 $h$ 与真实剩余步数趋势对比图。
   - 棋子角标动态展示各数字对 $h$ 的实际贡献度。
 - **搜索空间树推演视图（Search Tree Explorer）**：
@@ -71,7 +72,7 @@
 - Maven 3.9+（项目内置 `./mvnw`）
 
 #### 编译与运行
-使用内置脚本一键编译并求解样例：
+使用内置脚本即可一键编译并求解样例（启发函数省略时默认使用 `MANHATTAN`）：
 
 ```bash
 # 语法：./scripts/run.sh <问题文件> <搜索引擎> [启发函数列表]
@@ -90,6 +91,10 @@
 ./scripts/run.sh resources/problems-stage3.txt nida DISJOINT_PATTERN
 ```
 
+> [!TIP]
+> - 问题文件参数支持相对路径，也可直接指定 `resources/` 目录下的文件名。
+> - 可通过环境变量 `JAVA_OPTS` 为 JVM 分配参数（如求解四阶问题分配更多内存：`JAVA_OPTS='-Xmx4g' ./scripts/run.sh ...`）。
+
 也可以直接通过 Maven Wrapper 编译并使用 `SearchTester` 运行：
 ```bash
 ./mvnw -B -ntp compile
@@ -102,7 +107,7 @@ java -cp target/classes core.runner.SearchTester \
 ### 2. 导出搜索记录并在网页中可视化
 
 #### 步骤一：一键导出解题轨迹与搜索树
-使用 `export-visualization.sh` 将求解过程（包含出队、分支生成与剪枝细节）导出为标准化 JSON 轨迹文件：
+使用 `export-visualization.sh` 将求解过程（包含状态扩展、分支生成与剪枝细节）导出为轨迹文件（省略输出路径时默认写入仓库根目录的 `results.json`）：
 
 ```bash
 # 导出三阶问题在 A* 下的搜索过程至 results.json
@@ -161,13 +166,16 @@ bun run dev
 
 ### 模式数据库（PDB）规格与 JVM 优化参数
 
-首次使用 PDB 启发式时会自动构建并缓存模式数据库：
+首次使用 PDB 启发式时会自动构建并本地持久化模式数据库（默认缓存至 `resources/pdb-cache/`）：
 - **3 阶 PDB**：3-3-2 分组，乘积编码，大小约 13.8 KB。
-- **4 阶通用 PDB**：6-6-3 分组，排名编码（保留空格信息），大小约 110 MB。
+- **4 阶通用 PDB**：6-6-3 分组，排名编码，大小约 64 MB。
 - **4 阶专用 PDB**：7-8 分组，连通分量编码（专为 `nida` 引擎定制），大小约 482 MB。
 
-可通过 JVM 系统属性微调高级优化（默认均为开启）：
+可通过 JVM 系统属性指定缓存目录或微调高级优化（默认均为开启）：
 ```bash
+# 自定义 PDB 缓存存储路径
+-Dnpuzzle.pdb.cacheDir=/path/to/cache
+
 # 关闭增量查表（回退到全量查表）
 -Dnpuzzle.pdb.incremental=false
 
@@ -178,6 +186,13 @@ bun run dev
 ---
 
 ## 🛠️ 开发者指南
+
+### 系统架构概览
+
+本项目采用解耦的分层设计：
+- **`src/core/`**：通用图搜索框架与评测基底。定义了抽象问题接口、状态与动作模型、观察者通知协议及标准评测入口。
+- **`src/stud/`**：N-Puzzle 特化求解与算法工程实现。包含高效 64 位逆映射位棋盘、专用 NIDA* 引擎、可加模式数据库（PDB）及其增量计算与对称性剪枝策略。
+- **`visualization/`**：基于 React 19 + TypeScript + Canvas 的交互式可视化系统。支持解路径动画播放、大规模搜索拓扑树实时演算与客户端本地持久化存储。
 
 ### 后端 Java 工程规范
 
