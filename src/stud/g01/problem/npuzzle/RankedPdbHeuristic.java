@@ -4,25 +4,21 @@ package stud.g01.problem.npuzzle;
 public final class RankedPdbHeuristic {
     private RankedPdbHeuristic() {}
 
-    static byte[][] loadOrBuildGroup(int size, byte[] goal, int[] tiles, int group) {
-        StringBuilder signature = new StringBuilder(size + "-" + group + "-" + tiles.length);
-        for (int tile : tiles) signature.append('-').append(tile);
-        PdbCache cache =
-                new PdbCache(
-                        "ranked-" + signature + ".bin", PdbCache.Format.RANKED, size, goal, tiles);
+    static byte[][] loadOrBuildGroup(int size, byte[] goal, int[] tiles, PdbRepository repository) {
+        PdbCache cache = new PdbCache(repository, PdbCache.Format.RANKED, size, goal, tiles);
         int blocks = size * size - tiles.length;
         int ranks = new RankedPdbEncoding(size * size, tiles.length).rankCount(tiles.length);
-        byte[][] cached =
-                cache.tryLoad(
-                        in -> {
-                            if (in.readInt() != blocks || in.readInt() != ranks) return null;
-                            byte[][] data = new byte[blocks][];
-                            for (int q = 0; q < blocks; q++) {
-                                data[q] = new byte[ranks];
-                                in.readFully(data[q]);
-                            }
-                            return data;
-                        });
+        PdbCache.Reader<byte[][]> reader =
+                in -> {
+                    if (in.readInt() != blocks || in.readInt() != ranks) return null;
+                    byte[][] data = new byte[blocks][];
+                    for (int q = 0; q < blocks; q++) {
+                        data[q] = new byte[ranks];
+                        in.readFully(data[q]);
+                    }
+                    return data;
+                };
+        byte[][] cached = cache.tryLoad(reader);
         if (cached != null) {
             System.out.println("[RPDB] Cache loaded: " + cache.file);
             return cached;
@@ -33,6 +29,7 @@ public final class RankedPdbHeuristic {
                 "[RPDB] Built %s: %,d bytes, %.1f s%n",
                 cache.file, (long) blocks * ranks, (System.nanoTime() - start) / 1_000_000_000.0);
         cache.tryWrite(
+                reader,
                 out -> {
                     out.writeInt(blocks);
                     out.writeInt(ranks);

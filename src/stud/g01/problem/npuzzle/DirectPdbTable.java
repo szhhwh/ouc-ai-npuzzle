@@ -31,32 +31,13 @@ final class DirectPdbTable {
         return (int) (vectors[indices[tuple] & 0xFFFF] >>> (q * 6)) & 63;
     }
 
-    static DirectPdbTable load(int size, byte[] goal, int[] tiles, int group) {
-        StringBuilder signature = new StringBuilder(size + "-" + group + "-" + tiles.length);
-        for (int tile : tiles) signature.append('-').append(tile);
-        PdbCache cache =
-                new PdbCache(
-                        "direct-" + signature + ".bin", PdbCache.Format.DIRECT, size, goal, tiles);
+    static DirectPdbTable load(int size, byte[] goal, int[] tiles, PdbRepository repository) {
+        PdbCache cache = new PdbCache(repository, PdbCache.Format.DIRECT, size, goal, tiles);
         int length = 1 << (4 * tiles.length);
-        DirectPdbTable loaded =
-                cache.tryLoad(
-                        in -> {
-                            if (in.readInt() != length) return null;
-                            int count = in.readInt();
-                            if (count <= 0 || count > 65536) return null;
-                            long[] vectors = new long[count];
-                            for (int i = 0; i < count; i++) vectors[i] = in.readLong();
-                            short[] indices = new short[length];
-                            byte[] buffer = new byte[1 << 16];
-                            for (int i = 0; i < length; i += buffer.length / 2) {
-                                int n = Math.min(buffer.length / 2, length - i);
-                                in.readFully(buffer, 0, n * 2);
-                                ByteBuffer.wrap(buffer).asShortBuffer().get(indices, i, n);
-                            }
-                            return new DirectPdbTable(indices, vectors, tiles);
-                        });
+        PdbCache.Reader<DirectPdbTable> reader = cacheReader(tiles);
+        DirectPdbTable loaded = cache.tryLoad(reader);
         if (loaded != null) return loaded;
-        byte[][] ranked = RankedPdbHeuristic.loadOrBuildGroup(size, goal, tiles, group);
+        byte[][] ranked = RankedPdbHeuristic.loadOrBuildGroup(size, goal, tiles, repository);
         RankedPdbEncoding encoding = new RankedPdbEncoding(size * size, tiles.length);
         int[] positions = new int[tiles.length];
         boolean[] used = new boolean[size * size];
@@ -86,6 +67,7 @@ final class DirectPdbTable {
         DirectPdbTable result =
                 new DirectPdbTable(indices, Arrays.copyOf(vectors, dictionary.size()), tiles);
         cache.tryWrite(
+                reader,
                 out -> {
                     out.writeInt(length);
                     out.writeInt(result.vectors.length);
@@ -98,5 +80,27 @@ final class DirectPdbTable {
                     }
                 });
         return result;
+    }
+
+    static PdbCache.Reader<DirectPdbTable> cacheReader(int[] tiles) {
+        int length = 1 << (4 * tiles.length);
+        return in -> {
+            if (in.readInt() != length) return null;
+            int count = in.readInt();
+            if (count <= 0 || count > 65536) return null;
+            long[] vectors = new long[count];
+            for (int i = 0; i < count; i++) vectors[i] = in.readLong();
+            short[] indices = new short[length];
+            byte[] buffer = new byte[1 << 16];
+            for (int i = 0; i < length; i += buffer.length / 2) {
+                int n = Math.min(buffer.length / 2, length - i);
+                in.readFully(buffer, 0, n * 2);
+                ByteBuffer.wrap(buffer).asShortBuffer().get(indices, i, n);
+                for (int j = i; j < i + n; j++) {
+                    if ((indices[j] & 0xFFFF) >= count) return null;
+                }
+            }
+            return new DirectPdbTable(indices, vectors, tiles);
+        };
     }
 }

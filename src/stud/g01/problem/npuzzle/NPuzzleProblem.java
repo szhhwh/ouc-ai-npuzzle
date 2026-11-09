@@ -10,7 +10,14 @@ import java.util.Deque;
 public class NPuzzleProblem extends Problem {
 
     public NPuzzleProblem(State initialState, State goal, int size) {
-        super(initialState, goal, size);
+        super(requireBoard(initialState, size), requireBoard(goal, size), size);
+    }
+
+    private static PuzzleBoard requireBoard(State state, int size) {
+        if (!(state instanceof PuzzleBoard board) || board.size() != size) {
+            throw new IllegalArgumentException("Expected a PuzzleBoard of size " + size);
+        }
+        return board;
     }
 
     /**
@@ -47,12 +54,12 @@ public class NPuzzleProblem extends Problem {
         // rank[v] 是数字 v 在目标盘面中的排名
         int[] rank = new int[n * n];
         int r = 0;
-        for (byte v : goalBoard.cells()) {
+        for (byte v : goalBoard.cellsInternal()) {
             if (v != 0) rank[v] = r++;
         }
 
         // 数初始盘面排名序列的逆序数
-        byte[] cells = init.cells();
+        byte[] cells = init.cellsInternal();
         int inv = 0;
         for (int i = 0; i < cells.length; i++) {
             if (cells[i] == 0) continue;
@@ -88,22 +95,9 @@ public class NPuzzleProblem extends Problem {
      */
     @Override
     public boolean applicable(State state, Action action) {
-        PuzzleBoard board = (PuzzleBoard) state;
-        int n = board.size();
-        int blank = board.blank();
-
-        switch (((PuzzleMove) action).direction()) {
-            case UP:
-                return blank >= n;
-            case DOWN:
-                return blank < n * (n - 1);
-            case LEFT:
-                return blank % n != 0;
-            case RIGHT:
-                return blank % n != n - 1;
-            default:
-                return false;
-        }
+        return state instanceof PuzzleBoard board
+                && action instanceof PuzzleMove move
+                && board.canMove(move);
     }
 
     /**

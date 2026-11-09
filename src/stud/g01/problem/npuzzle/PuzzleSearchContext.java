@@ -18,13 +18,14 @@ abstract class PuzzleSearchContext {
         neighbors = PuzzleNeighbors.forSize(size);
         shifts = new int[cells];
         for (int i = 0; i < cells; i++) shifts[i] = 4 * (cells - 1 - i);
-        board = initial.cells().clone();
+        board = initial.cellsInternal().clone();
         blank = initial.blank();
         code = encode(board);
         goalCode = encode(goal);
     }
 
     static PuzzleSearchContext create(PuzzleBoard initial, PuzzleBoard goal, Predictor predictor) {
+        PuzzleBoard.requireSameSize(initial, goal);
         int size = initial.size();
         if (size != 3 && size != 4) {
             throw new UnsupportedOperationException("N-Puzzle 专用搜索仅支持 3/4 阶");
@@ -48,7 +49,9 @@ abstract class PuzzleSearchContext {
 
     /** 每层复用候选移动及其估值回退数据。 */
     static class Move {
-        int from, to, tile, traceId, heuristic;
+        int from, to, tile, heuristic;
+        boolean lowerBound;
+        core.solver.queue.Node traceNode;
         long oldCode, code;
     }
 
@@ -64,6 +67,7 @@ abstract class PuzzleSearchContext {
         move.tile = board[target];
         move.oldCode = code;
         move.code = childCode;
+        move.lowerBound = false;
         move.heuristic = prepareHeuristic(move, limit);
         return move.heuristic;
     }
@@ -97,15 +101,18 @@ abstract class PuzzleSearchContext {
         private final PuzzleBoard goal;
         private final Predictor predictor;
         private int value;
+        private PuzzleBoard current;
 
         private static final class EvaluatedMove extends Move {
             int previous;
+            PuzzleBoard parent, child;
         }
 
         Evaluated(PuzzleBoard initial, PuzzleBoard goal, Predictor predictor) {
-            super(initial, goal.cells());
+            super(initial, goal.cellsInternal());
             this.goal = goal;
             this.predictor = predictor;
+            current = initial;
             value = predictor.heuristics(initial, goal);
         }
 
@@ -121,18 +128,20 @@ abstract class PuzzleSearchContext {
 
         @Override
         int prepareHeuristic(Move move, int limit) {
-            ((EvaluatedMove) move).previous = value;
-            board[move.from] = (byte) move.tile;
-            board[move.to] = 0;
-            int h = predictor.heuristics(new PuzzleBoard(board, goal.size()), goal);
-            board[move.to] = (byte) move.tile;
-            board[move.from] = 0;
-            return h;
+            EvaluatedMove evaluated = (EvaluatedMove) move;
+            evaluated.previous = value;
+            evaluated.parent = current;
+            // Legal immutable successors already preserve validation and incremental encodings.
+            evaluated.child =
+                    (PuzzleBoard) current.next(PuzzleMove.between(move.from, move.to, goal.size()));
+            return predictor.heuristics(evaluated.child, goal);
         }
 
         @Override
         void updateHeuristic(Move move, boolean undo) {
-            value = undo ? ((EvaluatedMove) move).previous : move.heuristic;
+            EvaluatedMove evaluated = (EvaluatedMove) move;
+            current = undo ? evaluated.parent : evaluated.child;
+            value = undo ? evaluated.previous : move.heuristic;
         }
     }
 }

@@ -55,21 +55,16 @@ final class ComponentPdbTable {
         return result;
     }
 
-    static ComponentPdbTable load(int size, byte[] goal, int[] tiles, int group) {
-        StringBuilder signature = new StringBuilder(size + "-" + group + "-" + tiles.length);
-        for (int tile : tiles) signature.append('-').append(tile);
-        PdbCache cache =
-                new PdbCache(
-                        "component-le-" + signature + ".bin",
-                        PdbCache.Format.COMPONENT_LE,
-                        size,
-                        goal,
-                        tiles);
-        ComponentPdbTable loaded = readCache(cache, tiles.length, ByteOrder.LITTLE_ENDIAN);
+    static ComponentPdbTable load(int size, byte[] goal, int[] tiles, PdbRepository repository) {
+        PdbCache cache = new PdbCache(repository, PdbCache.Format.COMPONENT_LE, size, goal, tiles);
+        PdbCache.Reader<ComponentPdbTable> reader =
+                cacheReader(tiles.length, ByteOrder.LITTLE_ENDIAN);
+        ComponentPdbTable loaded = cache.tryLoad(reader);
         if (loaded != null) return loaded;
         loaded = fromExactTables(tiles.length, RankedPdbBuilder.build(size, goal, tiles));
         ComponentPdbTable table = loaded;
         cache.tryWrite(
+                reader,
                 out -> {
                     out.writeInt(table.permutations);
                     byte[] buffer = new byte[1 << 16];
@@ -95,28 +90,28 @@ final class ComponentPdbTable {
         return table;
     }
 
-    private static ComponentPdbTable readCache(PdbCache cache, int k, ByteOrder order) {
-        return cache.tryLoad(
-                in -> {
-                    if (in.readInt() != factorial(k)) return null;
-                    ComponentPdbTable table = new ComponentPdbTable(k);
-                    byte[] buffer = new byte[1 << 16];
-                    LongBuffer longs = ByteBuffer.wrap(buffer).order(order).asLongBuffer();
-                    for (int mask = 0; mask < (1 << 16); mask++) {
-                        if (Integer.bitCount(mask) != k) continue;
-                        int count = in.readInt();
-                        int width = in.readInt();
-                        if (count <= 0 || width != 32 - Integer.numberOfLeadingZeros(count - 1))
-                            return null;
-                        table.widths[mask] = (byte) width;
-                        table.palettes[mask] = new long[count];
-                        readLongs(in, table.palettes[mask], buffer, longs);
-                        int words = Math.max(1, (table.permutations * width + 63) >>> 6);
-                        table.codes[mask] = new long[words];
-                        readLongs(in, table.codes[mask], buffer, longs);
-                    }
-                    return table;
-                });
+    static PdbCache.Reader<ComponentPdbTable> cacheReader(int k, ByteOrder order) {
+        return in -> {
+            if (in.readInt() != factorial(k)) return null;
+            ComponentPdbTable table = new ComponentPdbTable(k);
+            byte[] buffer = new byte[1 << 16];
+            LongBuffer longs = ByteBuffer.wrap(buffer).order(order).asLongBuffer();
+            for (int mask = 0; mask < (1 << 16); mask++) {
+                if (Integer.bitCount(mask) != k) continue;
+                int count = in.readInt();
+                int width = in.readInt();
+                if (count <= 0
+                        || count > table.permutations
+                        || width != 32 - Integer.numberOfLeadingZeros(count - 1)) return null;
+                table.widths[mask] = (byte) width;
+                table.palettes[mask] = new long[count];
+                readLongs(in, table.palettes[mask], buffer, longs);
+                int words = Math.max(1, (table.permutations * width + 63) >>> 6);
+                table.codes[mask] = new long[words];
+                readLongs(in, table.codes[mask], buffer, longs);
+            }
+            return table;
+        };
     }
 
     private static void readLongs(

@@ -5,26 +5,10 @@ import core.solver.algorithm.heuristic.Predictor;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Objects;
 
 /** 可加模式数据库（additive pattern database，PDB）启发函数。 */
 public final class DisjointPdbHeuristic {
-
-    /** 已构建表的进程内缓存，key 由棋盘规模和 goal 内容拼成 */
-    private static final Map<String, Tables> BUILT = new ConcurrentHashMap<>();
-
-    /** 单槽缓存，保存上一次查询用的目标盘面和对应的表 */
-    private static final class Memo {
-        final PuzzleBoard goal;
-        final Tables tables;
-
-        Memo(PuzzleBoard goal, Tables tables) {
-            this.goal = goal;
-            this.tables = tables;
-        }
-    }
-
-    private static volatile Memo lastMemo;
 
     /** Small product tables are retained for 3 x 3; 4 x 4 uses ranked storage. */
     private static final Map<Integer, int[][]> GROUPINGS =
@@ -43,24 +27,38 @@ public final class DisjointPdbHeuristic {
 
     /** 普通搜索逐次完整查表；仅 symmetry 选项影响启发值。 */
     public static Predictor predictor(PdbOptions options) {
+        return predictor(options, PdbRepository.defaultRepository());
+    }
+
+    /**
+     * Explicit cache ownership; options and directory are captured without eagerly building PDBs.
+     */
+    public static Predictor predictor(PdbOptions options, PdbRepository repository) {
+        Objects.requireNonNull(options, "options");
+        Objects.requireNonNull(repository, "repository");
         boolean symmetry = options.symmetry();
         return new PuzzleHeuristic() {
             @Override
             public int heuristics(State state, State goal) {
-                if (state.equals(goal)) return 0;
+                PuzzleBoard board = (PuzzleBoard) state;
                 PuzzleBoard target = (PuzzleBoard) goal;
+                PuzzleBoard.requireSameSize(board, target);
+                variant(target.size(), false);
+                if (board.equals(target)) return 0;
                 return target.size() == 4
-                        ? RegularPdbHeuristic.tablesFor(target).hMax((PuzzleBoard) state, symmetry)
-                        : tablesFor(target).hMax((PuzzleBoard) state, symmetry);
+                        ? repository.regularTables(target).hMax(board, symmetry)
+                        : repository.productTables(target).hMax(board, symmetry);
             }
 
             @Override
             public PuzzleSearchContext newContext(PuzzleBoard initial, PuzzleBoard goal) {
+                PuzzleBoard.requireSameSize(initial, goal);
                 return switch (initial.size()) {
-                    case 3 -> new ProductPdbContext(initial, tablesFor(goal), options);
+                    case 3 ->
+                            new ProductPdbContext(initial, repository.productTables(goal), options);
                     case 4 ->
                             new ComponentPdbContext(
-                                    initial, ComponentPdbContext.tablesFor(goal), options);
+                                    initial, repository.componentTables(goal), options);
                     default ->
                             throw new UnsupportedOperationException(
                                     initial.size() + " 阶未定义 PDB（仅支持 3/4 阶）");
@@ -69,20 +67,19 @@ public final class DisjointPdbHeuristic {
         };
     }
 
-    /**
-     * 取目标盘面对应的整套表，未构建则构建。
-     *
-     * <p>包内可见，供 {@link ProductPdbContext} 使用同一套表维护增量启发值。
-     */
-    static Tables tablesFor(PuzzleBoard goal) {
-        Memo m = lastMemo;
-        if (m != null && m.goal == goal) {
-            return m.tables;
-        }
-        String key = goal.size() + "#" + goal;
-        Tables t = BUILT.computeIfAbsent(key, k -> Tables.build(goal));
-        lastMemo = new Memo(goal, t);
-        return t;
+    /** The actual table strategy differs between ordinary and optimized 4 x 4 search. */
+    public enum Variant {
+        PRODUCT_3_3_2,
+        DIRECT_6_6_3,
+        COMPONENT_7_8
+    }
+
+    public static Variant variant(int size, boolean optimizedSearch) {
+        return switch (size) {
+            case 3 -> Variant.PRODUCT_3_3_2;
+            case 4 -> optimizedSearch ? Variant.COMPONENT_7_8 : Variant.DIRECT_6_6_3;
+            default -> throw new UnsupportedOperationException(size + " 阶未定义 PDB（仅支持 3/4 阶）");
+        };
     }
 
     /** 某个目标盘面对应的全部分组距离表和查询逻辑。字段在构建后只读，线程安全 */
@@ -159,7 +156,7 @@ public final class DisjointPdbHeuristic {
         }
 
         /** 为 goal 构建整套表。逐组先查磁盘缓存，未命中则用 0-1 BFS 重建并写盘 */
-        static Tables build(PuzzleBoard goal) {
+        static Tables build(PuzzleBoard goal, PdbRepository repository) {
             int size = goal.size();
             int[][] groups = GROUPINGS.get(size);
             if (groups == null) {
@@ -167,9 +164,9 @@ public final class DisjointPdbHeuristic {
             }
             byte[][] ts = new byte[groups.length][];
             for (int g = 0; g < groups.length; g++) {
-                ts[g] = loadOrBuildGroup(size, goal.cells(), groups[g], g);
+                ts[g] = loadOrBuildGroup(size, goal.cellsInternal(), groups[g], repository);
             }
-            return new Tables(size, groups, ts, goal.cells().clone());
+            return new Tables(size, groups, ts, goal.cellsInternal().clone());
         }
 
         /** 对称增强查询，取直接查表和与对称态查表中的较大值；不满足对称条件时退化为直接查询 */
@@ -202,25 +199,19 @@ public final class DisjointPdbHeuristic {
      * @param size 棋盘边长
      * @param goalCells 目标盘面，行主序，0 表示空格
      * @param tiles 该组的数字
-     * @param gi 组号，用于命名缓存文件
      */
-    static byte[] loadOrBuildGroup(int size, byte[] goalCells, int[] tiles, int gi) {
-        PdbCache cache =
-                new PdbCache(
-                        "pdb-" + size + "-" + gi + ".bin",
-                        PdbCache.Format.PRODUCT,
-                        size,
-                        goalCells,
-                        tiles);
-        byte[] cached =
-                cache.tryLoad(
-                        in -> {
-                            int length = in.readInt();
-                            if (length != tableLength(size, tiles.length)) return null;
-                            byte[] data = new byte[length];
-                            in.readFully(data);
-                            return data;
-                        });
+    static byte[] loadOrBuildGroup(
+            int size, byte[] goalCells, int[] tiles, PdbRepository repository) {
+        PdbCache cache = new PdbCache(repository, PdbCache.Format.PRODUCT, size, goalCells, tiles);
+        PdbCache.Reader<byte[]> reader =
+                in -> {
+                    int length = in.readInt();
+                    if (length != tableLength(size, tiles.length)) return null;
+                    byte[] data = new byte[length];
+                    in.readFully(data);
+                    return data;
+                };
+        byte[] cached = cache.tryLoad(reader);
         if (cached != null) {
             System.out.println("[PDB] " + cache.file + " 缓存命中（" + cached.length + " 项）");
             return cached;
@@ -236,6 +227,7 @@ public final class DisjointPdbHeuristic {
                         + (System.currentTimeMillis() - t0)
                         + " ms");
         cache.tryWrite(
+                reader,
                 out -> {
                     out.writeInt(built.length);
                     out.write(built);

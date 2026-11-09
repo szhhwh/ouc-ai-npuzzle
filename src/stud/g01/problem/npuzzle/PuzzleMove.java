@@ -35,6 +35,14 @@ public class PuzzleMove extends Action {
         this.direction = direction;
     }
 
+    /** The caller supplies two legal neighboring blank positions. */
+    static PuzzleMove between(int from, int to, int size) {
+        if (to == from - size) return UP;
+        if (to == from + size) return DOWN;
+        if (to == from - 1) return LEFT;
+        return RIGHT;
+    }
+
     /**
      * @return 移动方向
      */

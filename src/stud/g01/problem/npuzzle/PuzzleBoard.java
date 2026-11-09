@@ -4,13 +4,14 @@ import core.problem.Action;
 import core.problem.State;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * N-Puzzle 的盘面状态。
  *
  * <p>盘面不可变：cells 是行主序的一维数组，0 表示空格。移动（{@link #next}）返回新的 PuzzleBoard，不修改当前对象。空格下标、编码与哈希值在构造时一次算好并缓存。
  */
-public class PuzzleBoard extends State {
+public final class PuzzleBoard extends State {
 
     // 行主序的盘面数组，0 表示空格
     private final byte[] cells;
@@ -34,7 +35,20 @@ public class PuzzleBoard extends State {
      * @param size 棋盘边长
      */
     public PuzzleBoard(byte[] cells, int size) {
+        Objects.requireNonNull(cells, "cells");
+        int count = cellCount(size);
+        if (cells.length != count) {
+            throw new IllegalArgumentException("Expected " + count + " cells for size " + size);
+        }
         this.cells = cells.clone();
+        boolean[] seenTiles = new boolean[count];
+        for (byte tile : this.cells) {
+            if (tile < 0 || tile >= count || seenTiles[tile]) {
+                throw new IllegalArgumentException(
+                        "Board must contain each tile 0.." + (count - 1) + " once");
+            }
+            seenTiles[tile] = true;
+        }
         this.size = size;
 
         // 一次扫描同时算出空格位置和盘面编码
@@ -90,13 +104,40 @@ public class PuzzleBoard extends State {
         return blank;
     }
 
-    /**
-     * 返回内部的盘面数组。为了省掉拷贝开销直接返回引用，调用方不要修改它。
-     *
-     * @return 内部 cells 数组引用
-     */
+    /** 返回盘面副本，修改返回值不会影响当前状态。 */
     public byte[] cells() {
+        return cells.clone();
+    }
+
+    /** Package-local read-only access for heuristics; never mutate or expose this array. */
+    byte[] cellsInternal() {
         return cells;
+    }
+
+    static int cellCount(int size) {
+        long count = (long) size * size;
+        if (size <= 0 || count > Byte.MAX_VALUE + 1) {
+            throw new IllegalArgumentException(
+                    "Size must fit distinct nonnegative byte tiles: " + size);
+        }
+        return (int) count;
+    }
+
+    static void requireSameSize(PuzzleBoard state, PuzzleBoard goal) {
+        Objects.requireNonNull(state, "state");
+        Objects.requireNonNull(goal, "goal");
+        if (state.size != goal.size) {
+            throw new IllegalArgumentException("Initial and goal board sizes must match");
+        }
+    }
+
+    boolean canMove(PuzzleMove move) {
+        return switch (move.direction()) {
+            case UP -> blank >= size;
+            case DOWN -> blank < cells.length - size;
+            case LEFT -> blank % size != 0;
+            case RIGHT -> blank % size != size - 1;
+        };
     }
 
     long positions() {
@@ -124,9 +165,12 @@ public class PuzzleBoard extends State {
      */
     @Override
     public State next(Action action) {
+        if (!(action instanceof PuzzleMove move) || !canMove(move)) {
+            throw new IllegalArgumentException("Illegal puzzle move: " + action);
+        }
         // 空格移动一格后到达的位置
         int target;
-        switch (((PuzzleMove) action).direction()) {
+        switch (move.direction()) {
             case UP:
                 target = blank - size;
                 break;

@@ -1,23 +1,8 @@
 package stud.g01.problem.npuzzle;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 /** Exact 6-6-3 queries with product addresses and shared distance vectors. */
 final class RegularPdbHeuristic {
     private static final int[][] GROUPS = {{1, 2, 5, 6, 9, 10}, {3, 4, 7, 8, 11, 12}, {13, 14, 15}};
-    private static final Map<String, Tables> BUILT = new ConcurrentHashMap<>();
-    private static volatile Memo last;
-
-    private record Memo(PuzzleBoard goal, Tables tables) {}
-
-    static Tables tablesFor(PuzzleBoard goal) {
-        Memo memo = last;
-        if (memo != null && memo.goal == goal) return memo.tables;
-        Tables tables = BUILT.computeIfAbsent(goal.toString(), ignored -> new Tables(goal));
-        last = new Memo(goal, tables);
-        return tables;
-    }
 
     static final class Tables {
         private final DirectPdbTable first, second;
@@ -26,16 +11,18 @@ final class RegularPdbHeuristic {
         private final boolean symmetric;
         private final long[][] mirroredPositions;
 
-        Tables(PuzzleBoard goal) {
-            first = DirectPdbTable.load(4, goal.cells(), GROUPS[0], 0);
-            second = DirectPdbTable.load(4, goal.cells(), GROUPS[1], 1);
-            third = DisjointPdbHeuristic.loadOrBuildGroup(4, goal.cells(), GROUPS[2], 2);
+        Tables(PuzzleBoard goal, PdbRepository repository) {
+            first = DirectPdbTable.load(4, goal.cellsInternal(), GROUPS[0], repository);
+            second = DirectPdbTable.load(4, goal.cellsInternal(), GROUPS[1], repository);
+            third =
+                    DisjointPdbHeuristic.loadOrBuildGroup(
+                            4, goal.cellsInternal(), GROUPS[2], repository);
             int[] pos = new int[16];
             for (int i = 0; i < 16; i++) {
                 transpose[i] = (i % 4) * 4 + i / 4;
-                pos[goal.cells()[i]] = i;
+                pos[goal.cellsInternal()[i]] = i;
             }
-            for (int v = 0; v < 16; v++) permutation[v] = goal.cells()[transpose[pos[v]]];
+            for (int v = 0; v < 16; v++) permutation[v] = goal.cellsInternal()[transpose[pos[v]]];
             symmetric = permutation[0] == 0;
             mirroredPositions = new long[symmetric ? 4 : 0][];
             for (int block = 0; block < mirroredPositions.length; block++) {

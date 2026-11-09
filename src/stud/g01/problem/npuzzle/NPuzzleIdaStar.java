@@ -3,6 +3,8 @@ package stud.g01.problem.npuzzle;
 import core.problem.Problem;
 import core.solver.algorithm.heuristic.Predictor;
 import core.solver.algorithm.searcher.AbstractSearcher;
+import core.solver.algorithm.searcher.SearchObserver;
+import core.solver.algorithm.searcher.SearchObserver.Pruning;
 import core.solver.queue.Node;
 import java.util.Arrays;
 import java.util.Deque;
@@ -10,18 +12,7 @@ import java.util.Deque;
 /** 使用可回退盘面和状态去重的 N-Puzzle IDA*。 */
 public final class NPuzzleIdaStar extends AbstractSearcher {
 
-    /** Export observations copy boards only when explicitly enabled. */
-    public interface Observer {
-        int root(byte[] board, int h, int bound, int iteration);
-
-        int child(int parent, byte[] board, int blank, int target, int g, int h, String status);
-
-        void visit(int id, boolean found, int bound, int iteration);
-
-        void prune(int id, String status);
-    }
-
-    private final Observer observer;
+    private final SearchObserver observer;
     private final Predictor predictor;
 
     /** f 值的正无穷哨兵，dfs 返回它表示本子树没有因 f 超过界限而被剪枝的结点 */
@@ -35,8 +26,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         this(predictor, null);
     }
 
-    public NPuzzleIdaStar(Predictor predictor, Observer observer) {
-        super(null);
+    public NPuzzleIdaStar(Predictor predictor, SearchObserver observer) {
         this.predictor = predictor;
         this.observer = observer;
     }
@@ -62,8 +52,8 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             int h = predictor.heuristics(initial, goal);
             root.setHeuristic(h);
             if (observer != null) {
-                int id = observer.root(initial.cells(), h, h, 0);
-                observer.visit(id, true, h, 0);
+                observer.iteration(root, h, 0);
+                observer.visit(root, true, h, 0);
             }
             return generatePath(root);
         }
@@ -97,7 +87,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         PuzzleBoard prev = initial;
         for (int step = 0; step < search.foundMoves.length; step++) {
             int t = search.foundMoves[step];
-            PuzzleMove move = moveOf(prev.blank(), t, size);
+            PuzzleMove move = PuzzleMove.between(prev.blank(), t, size);
             PuzzleBoard next = (PuzzleBoard) prev.next(move);
             cur =
                     new Node(
@@ -109,14 +99,6 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             prev = next;
         }
         return generatePath(cur);
-    }
-
-    /** 由移动前和移动后的空格位置还原方向动作。四邻关系里恰好有一种方向成立 */
-    private static PuzzleMove moveOf(int from, int to, int size) {
-        if (to == from - size) return PuzzleMove.UP;
-        if (to == from + size) return PuzzleMove.DOWN;
-        if (to == from - 1) return PuzzleMove.LEFT;
-        return PuzzleMove.RIGHT;
     }
 
     private static final class Workspace {
@@ -143,22 +125,20 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
         private boolean cacheActive;
         int[] foundMoves;
         private int generated, expanded;
-        private final Observer observer;
-        private int[] tracePath;
-        private final PuzzleSearchContext.Move traceMove;
+        private final SearchObserver observer;
+        private Node[] tracePath;
         private int iteration;
 
         Search(
                 PuzzleSearchContext context,
                 Transpositions transpositions,
                 Workspace workspace,
-                Observer observer) {
+                SearchObserver observer) {
             this.context = context;
             this.workspace = workspace;
             this.transpositions = transpositions;
             this.observer = observer;
-            tracePath = observer == null ? null : new int[workspace.moves.length + 1];
-            traceMove = observer == null ? null : context.newMove();
+            tracePath = observer == null ? null : new Node[workspace.moves.length + 1];
             pathSet = workspace.pathSet;
         }
 
@@ -170,8 +150,16 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
 
             while (foundMoves == null) {
                 if (cacheActive) transpositions.clear();
-                if (observer != null)
-                    tracePath[0] = observer.root(context.board, h0, bound, iteration);
+                if (observer != null) {
+                    tracePath[0] =
+                            new Node(
+                                    new PuzzleBoard(context.board, (int) Math.sqrt(context.cells)),
+                                    null,
+                                    null,
+                                    0,
+                                    h0);
+                    observer.iteration(tracePath[0], bound, iteration);
+                }
                 int nextBound = cacheActive ? dfsGraph(0, bound, -1) : dfsTree(0, bound, -1);
                 if (nextBound == INFINITY) {
                     return; // 搜遍全树仍未找到目标，可解性已经检查过，实际不会走到这里
@@ -211,25 +199,26 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             for (int t : context.neighbors[context.blank]) {
                 generated++;
                 if (t == previousBlank) {
-                    observeSkipped(depth, t, "cycle-pruned");
+                    observeSkipped(depth, t, Pruning.CYCLE);
                     continue;
                 }
                 long childCode = context.codeAfterMove(t);
                 if (pathSet.contains(childCode)) {
-                    observeSkipped(depth, t, "cycle-pruned");
+                    observeSkipped(depth, t, Pruning.CYCLE);
                     continue;
                 }
                 int childF = depth + 1 + context.prepare(t, childCode, level[n], bound - depth - 1);
-                if (observer != null)
-                    level[n].traceId =
-                            observer.child(
-                                    tracePath[depth],
-                                    context.board,
-                                    context.blank,
+                if (observer != null) {
+                    level[n].traceNode =
+                            observeChild(
+                                    depth,
                                     t,
-                                    depth + 1,
                                     level[n].heuristic,
-                                    childF > bound ? "bound-pruned" : "frontier");
+                                    level[n].lowerBound
+                                            ? SearchObserver.HeuristicQuality.LOWER_BOUND
+                                            : SearchObserver.HeuristicQuality.EXACT);
+                    if (childF > bound) observer.prune(level[n].traceNode, Pruning.BOUND);
+                }
                 if (childF > bound) {
                     min = Math.min(min, childF);
                     continue;
@@ -250,7 +239,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 context.apply(move);
                 workspace.moves[depth] = move.to;
                 workspace.heuristics[depth] = move.heuristic;
-                if (observer != null) tracePath[depth + 1] = move.traceId;
+                if (observer != null) tracePath[depth + 1] = move.traceNode;
                 int result = dfsTree(depth + 1, bound, move.from);
                 context.undo(move);
                 if (foundMoves != null) {
@@ -271,7 +260,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 return INFINITY;
             }
             if (transpositions.visit(context.code, depth)) {
-                if (observer != null) observer.prune(tracePath[depth], "transposition-pruned");
+                if (observer != null) observer.prune(tracePath[depth], Pruning.TRANSPOSITION);
                 return INFINITY;
             }
             expanded++;
@@ -284,25 +273,26 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             for (int t : context.neighbors[context.blank]) {
                 generated++;
                 if (t == previousBlank) {
-                    observeSkipped(depth, t, "cycle-pruned");
+                    observeSkipped(depth, t, Pruning.CYCLE);
                     continue;
                 }
                 long childCode = context.codeAfterMove(t);
                 if (transpositions.dominated(childCode, depth + 1)) {
-                    observeSkipped(depth, t, "transposition-pruned");
+                    observeSkipped(depth, t, Pruning.TRANSPOSITION);
                     continue;
                 }
                 int childF = depth + 1 + context.prepare(t, childCode, level[n], bound - depth - 1);
-                if (observer != null)
-                    level[n].traceId =
-                            observer.child(
-                                    tracePath[depth],
-                                    context.board,
-                                    context.blank,
+                if (observer != null) {
+                    level[n].traceNode =
+                            observeChild(
+                                    depth,
                                     t,
-                                    depth + 1,
                                     level[n].heuristic,
-                                    childF > bound ? "bound-pruned" : "frontier");
+                                    level[n].lowerBound
+                                            ? SearchObserver.HeuristicQuality.LOWER_BOUND
+                                            : SearchObserver.HeuristicQuality.EXACT);
+                    if (childF > bound) observer.prune(level[n].traceNode, Pruning.BOUND);
+                }
                 if (childF > bound) {
                     min = Math.min(min, childF);
                     continue;
@@ -324,7 +314,7 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
                 context.apply(move);
                 workspace.moves[depth] = move.to;
                 workspace.heuristics[depth] = move.heuristic;
-                if (observer != null) tracePath[depth + 1] = move.traceId;
+                if (observer != null) tracePath[depth + 1] = move.traceNode;
                 int r = dfsGraph(depth + 1, bound, move.from);
                 context.undo(move);
                 if (foundMoves != null) {
@@ -352,11 +342,21 @@ public final class NPuzzleIdaStar extends AbstractSearcher {
             return level;
         }
 
-        private void observeSkipped(int depth, int target, String status) {
+        private Node observeChild(
+                int depth, int target, int h, SearchObserver.HeuristicQuality quality) {
+            PuzzleBoard parent = (PuzzleBoard) tracePath[depth].getState();
+            PuzzleMove action = PuzzleMove.between(context.blank, target, parent.size());
+            PuzzleBoard board = (PuzzleBoard) parent.next(action);
+            Node child = new Node(board, tracePath[depth], action, depth + 1, h);
+            observer.generated(child, quality);
+            return child;
+        }
+
+        private void observeSkipped(int depth, int target, Pruning reason) {
             if (observer == null) return;
-            int h = context.prepare(target, context.codeAfterMove(target), traceMove);
-            observer.child(
-                    tracePath[depth], context.board, context.blank, target, depth + 1, h, status);
+            Node child =
+                    observeChild(depth, target, 0, SearchObserver.HeuristicQuality.UNEVALUATED);
+            observer.prune(child, reason);
         }
     }
 

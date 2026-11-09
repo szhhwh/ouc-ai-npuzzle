@@ -1,13 +1,8 @@
 package stud.g01.problem.npuzzle;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 /** Incremental occupancy and tile-order ranks for the lossless component PDB. */
 final class ComponentPdbContext extends PdbContext {
     private static final int[][] GROUPS = {{1, 2, 3, 4, 5, 6, 7}, {8, 9, 10, 11, 12, 13, 14, 15}};
-    private static final Map<String, Tables> BUILT = new ConcurrentHashMap<>();
-    private static volatile Tables last;
 
     static final class Tables {
         final PuzzleBoard goal;
@@ -17,17 +12,17 @@ final class ComponentPdbContext extends PdbContext {
         final int[][] crossing = new int[16][16], symmetricCrossing = new int[16][16];
         final boolean symmetric;
 
-        Tables(PuzzleBoard goal) {
+        Tables(PuzzleBoard goal, PdbRepository repository) {
             this.goal = goal;
             int[] pos = new int[16];
             for (int i = 0; i < 16; i++) {
                 transpose[i] = (i % 4) * 4 + i / 4;
-                pos[goal.cells()[i]] = i;
+                pos[goal.cellsInternal()[i]] = i;
             }
-            for (int v = 0; v < 16; v++) permutation[v] = goal.cells()[transpose[pos[v]]];
+            for (int v = 0; v < 16; v++) permutation[v] = goal.cellsInternal()[transpose[pos[v]]];
             symmetric = permutation[0] == 0;
             for (int g = 0; g < GROUPS.length; g++) {
-                data[g] = ComponentPdbTable.load(4, goal.cells(), GROUPS[g], g);
+                data[g] = ComponentPdbTable.load(4, goal.cellsInternal(), GROUPS[g], repository);
                 for (int j = 0; j < GROUPS[g].length; j++) {
                     int tile = GROUPS[g][j];
                     tileGroup[tile] = g;
@@ -46,14 +41,6 @@ final class ComponentPdbContext extends PdbContext {
         }
     }
 
-    static Tables tablesFor(PuzzleBoard goal) {
-        Tables tables = last;
-        if (tables != null && tables.goal == goal) return tables;
-        tables = BUILT.computeIfAbsent(goal.toString(), ignored -> new Tables(goal));
-        last = tables;
-        return tables;
-    }
-
     private final Tables tables;
     private final int[] masks = new int[2], masksSym = new int[2];
     private final int[] ranks = new int[2], ranksSym = new int[2];
@@ -63,7 +50,7 @@ final class ComponentPdbContext extends PdbContext {
     private final int[][] fullTuples;
 
     ComponentPdbContext(PuzzleBoard initial, Tables tables, PdbOptions options) {
-        super(initial, tables.goal.cells());
+        super(initial, tables.goal.cellsInternal());
         this.tables = tables;
         incremental = options.incremental();
         symmetric = options.symmetry() && tables.symmetric;
@@ -122,6 +109,7 @@ final class ComponentPdbContext extends PdbContext {
             prepareDirect(move);
             if (move.direct > move.limit) {
                 move.symmetric = 0;
+                move.lowerBound = symmetric;
                 return;
             }
             move.symmetric = symmetricHeuristic;
@@ -130,6 +118,7 @@ final class ComponentPdbContext extends PdbContext {
             prepareSymmetric(move);
             if (move.symmetric > move.limit) {
                 move.direct = 0;
+                move.lowerBound = true;
                 return;
             }
             prepareDirect(move);
@@ -144,12 +133,14 @@ final class ComponentPdbContext extends PdbContext {
         // Keep the same orientation order and bounded-query result as incremental search.
         if (!symmetric || directHeuristic >= symmetricHeuristic) {
             move.direct = fullDistance(move.to, false);
+            move.lowerBound = symmetric && move.direct > move.limit;
             move.symmetric =
                     symmetric && move.direct <= move.limit
                             ? fullDistance(tables.transpose[move.to], true)
                             : 0;
         } else {
             move.symmetric = fullDistance(tables.transpose[move.to], true);
+            move.lowerBound = move.symmetric > move.limit;
             move.direct = move.symmetric <= move.limit ? fullDistance(move.to, false) : 0;
         }
     }
