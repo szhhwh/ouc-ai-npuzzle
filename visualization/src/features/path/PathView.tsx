@@ -4,8 +4,10 @@ import NumberFlow from "@number-flow/react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { PuzzleBoard } from "@/components/puzzle-board";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { useUi } from "@/app/ui-store";
+import { hOf, qualityOf } from "@/data/trace-values";
 import type { LoadedRecord } from "@/data/types";
 import { DIRECTION_ARROWS, DIRECTION_WORDS, HEURISTIC_NAMES } from "@/lib/labels";
 import { heuristicTerms, moveBetween } from "@/lib/puzzle";
@@ -42,11 +44,6 @@ function Metric({ label, value, unit, decimals = 0 }: { label: string; value: nu
   );
 }
 
-const formatDate = (iso: string) => {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
-};
-
 /** Solution replay: the board walks `record.states` while the details column tracks h against the remaining moves. */
 export function PathView({ record }: { record: LoadedRecord }) {
   const { states, size, trace } = record;
@@ -76,11 +73,9 @@ export function PathView({ record }: { record: LoadedRecord }) {
   useHotkeys("end", () => seek(total, total), { enabled: hotkeysOn, preventDefault: true }, [total, seek]);
 
   const moves = useMemo(() => states.slice(1).map((board, i) => moveBetween(states[i], board, size)), [states, size]);
-  const hs = useMemo(() => Array.from(trace.solution, (id) => trace.h[id]), [trace]);
-  const canShowTerms = useMemo(
-    () => heuristicTerms(record.heuristic, states[0], record.goal, size) !== null,
-    [record.heuristic, states, record.goal, size],
-  );
+  const hs = useMemo(() => Array.from(trace.solution, (id) => hOf(trace, id)), [trace]);
+  const qualities = useMemo(() => Array.from(trace.solution, (id) => qualityOf(trace, id)), [trace]);
+  const canShowTerms = qualities[step] === "exact" && record.heuristic !== "DISJOINT_PATTERN";
   const [showTerms, setShowTerms] = useState(false);
   const terms = canShowTerms && showTerms ? heuristicTerms(record.heuristic, states[step], record.goal, size) : null;
 
@@ -94,19 +89,18 @@ export function PathView({ record }: { record: LoadedRecord }) {
 
   const move = step ? moves[step - 1] : null;
   const seekTo = (target: number) => seek(target, total);
-  const meta = [record.sourceFile, record.exportedAt && formatDate(record.exportedAt)].filter(Boolean).join(" · ");
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:overflow-hidden">
+    <div className="path-layout">
       <motion.section
         {...enter(0)}
         aria-label="解路径回放"
-        className="flex min-w-0 flex-col items-center justify-center gap-5 px-4 py-6 sm:px-8 lg:min-h-0 lg:overflow-y-auto"
+        className="path-replay"
       >
-        <div className="flex w-[min(88vw,420px)] flex-col gap-5 lg:w-[min(60dvh,520px)]">
-          <div className="flex items-end justify-between gap-4">
+        <div className="path-replay-content">
+          <div className="path-step flex items-end justify-between gap-4">
             <p className="flex items-baseline gap-2 text-ink">
-              <NumberFlow value={step} className="type-display text-5xl leading-none font-bold sm:text-6xl" />
+              <NumberFlow value={step} className="path-step-number type-display leading-none font-bold" />
               <span className="type-data text-sm text-ink-soft">/ {total} 步</span>
             </p>
             <p className="flex min-h-7 items-center gap-1.5 pb-1 text-sm text-ink">
@@ -127,31 +121,37 @@ export function PathView({ record }: { record: LoadedRecord }) {
             </p>
           </div>
 
-          <PuzzleBoard
-            board={states[step]}
-            size={size}
-            movedTile={move?.tile ?? null}
-            terms={terms}
-            duration={duration}
-            className="w-full"
-            label={`第 ${step} 步棋盘 ${states[step].map((value) => value || "空").join(" ")}`}
-          />
+          <div className="path-board-space">
+            <PuzzleBoard
+              board={states[step]}
+              size={size}
+              movedTile={move?.tile ?? null}
+              terms={terms}
+              duration={duration}
+              className="path-board"
+              label={`第 ${step} 步棋盘 ${states[step].map((value) => value || "空").join(" ")}`}
+            />
+          </div>
 
-          <Transport total={total} />
+          <div className="path-controls">
+            <Transport total={total} />
 
-          {canShowTerms && (
-            <label className="flex items-center justify-center gap-2.5 text-sm text-ink-soft">
-              <Switch checked={showTerms} onCheckedChange={setShowTerms} />
-              在棋子上标注启发值
-            </label>
-          )}
+            {canShowTerms && (
+              <label className="flex items-center justify-center gap-2.5 text-sm text-ink-soft">
+                <Switch checked={showTerms} onCheckedChange={setShowTerms} />
+                在棋子上标注启发值
+              </label>
+            )}
+          </div>
         </div>
       </motion.section>
 
       <aside
         aria-label="记录详情"
-        className="flex min-w-0 flex-col gap-5 border-t border-rule bg-paper-deep/40 px-4 py-5 sm:px-6 lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l"
+        className="path-details min-w-0 border-t border-rule bg-paper-deep/40 lg:border-t-0 lg:border-l"
       >
+        <ScrollArea className="path-details-scroll">
+        <div className="flex flex-col gap-5 px-4 py-5 sm:px-6">
         <motion.header {...enter(1)} className="flex flex-col gap-2">
           <h2 className="type-display text-xl leading-tight font-semibold break-words text-ink">{record.name}</h2>
           <div className="flex flex-wrap gap-1.5">
@@ -161,7 +161,6 @@ export function PathView({ record }: { record: LoadedRecord }) {
               {size}×{size}
             </Badge>
           </div>
-          {meta && <p className="truncate text-xs text-ink-soft" title={meta}>{meta}</p>}
         </motion.header>
 
         <motion.section {...enter(2)} aria-label="求解数据" className="flex flex-col gap-2">
@@ -189,7 +188,7 @@ export function PathView({ record }: { record: LoadedRecord }) {
             </div>
           </div>
           <div className="rounded-lg border border-rule bg-surface p-2">
-            <HeuristicChart hs={hs} step={step} onSeek={seekTo} />
+            <HeuristicChart hs={hs} qualities={qualities} step={step} onSeek={seekTo} />
           </div>
           <p className="text-xs text-ink-soft">启发函数满足可采纳性时，h 曲线不高于实际剩余步数。点击图表可跳转至对应步。</p>
         </motion.section>
@@ -197,7 +196,7 @@ export function PathView({ record }: { record: LoadedRecord }) {
         <motion.section
           {...enter(4)}
           aria-labelledby="path-moves-title"
-          className="flex flex-col gap-2 lg:min-h-56 lg:flex-1"
+          className="flex flex-col gap-2"
         >
           <h3 id="path-moves-title" className="text-sm font-medium text-ink">
             移动步骤
@@ -205,11 +204,14 @@ export function PathView({ record }: { record: LoadedRecord }) {
           <MoveList
             moves={moves}
             hs={hs}
+            qualities={qualities}
             step={step}
             onSeek={seekTo}
-            className="h-72 rounded-lg border border-rule bg-surface lg:h-auto lg:flex-1"
+            className="h-72 rounded-lg border border-rule bg-surface"
           />
         </motion.section>
+        </div>
+        </ScrollArea>
       </aside>
     </div>
   );

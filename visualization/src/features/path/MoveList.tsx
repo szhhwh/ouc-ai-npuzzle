@@ -1,21 +1,23 @@
 import { useEffect, useRef } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { DIRECTION_ARROWS, DIRECTION_WORDS } from "@/lib/labels";
+import type { HeuristicQuality } from "@/data/types";
+import { DIRECTION_ARROWS, DIRECTION_WORDS, formatEstimate } from "@/lib/labels";
 import type { Move } from "@/lib/puzzle";
 import { cn } from "@/lib/utils";
 
 interface MoveListProps {
   /** moves[i] turns step i into step i + 1. */
   moves: readonly Move[];
-  hs: readonly number[];
+  hs: readonly (number | null)[];
+  qualities: readonly HeuristicQuality[];
   step: number;
   onSeek: (step: number) => void;
   className?: string;
 }
 
 /** One row per step of the solution; the active row follows playback. */
-export function MoveList({ moves, hs, step, onSeek, className }: MoveListProps) {
+export function MoveList({ moves, hs, qualities, step, onSeek, className }: MoveListProps) {
   const rows = useRef<(HTMLButtonElement | null)[]>([]);
   const reduced = useReducedMotion();
 
@@ -74,7 +76,7 @@ export function MoveList({ moves, hs, step, onSeek, className }: MoveListProps) 
                     <span className="font-medium text-ink">起点</span>
                   )}
                 </span>
-                <span className="type-data relative text-xs text-magenta">h {h}</span>
+                <span className="type-data relative text-xs text-magenta">h {formatEstimate(h, qualities[i])}</span>
               </button>
             </li>
           );

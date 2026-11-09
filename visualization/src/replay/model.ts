@@ -1,4 +1,5 @@
-import { FIRST_PRUNED, type CompactTrace } from "@/data/types";
+import { isPrunedStatus, type CompactTrace } from "@/data/types";
+import { fOf } from "@/data/trace-values";
 
 /**
  * The replay is a sequence of shots: one "ready" shot, then for every Java frame a "pick",
@@ -91,11 +92,11 @@ export function sceneAt(trace: CompactTrace, shot: number): Scene {
   };
 }
 
-export const isPruned = (trace: CompactTrace, id: number) => trace.status[id] >= FIRST_PRUNED;
+export const isPruned = (trace: CompactTrace, id: number) => isPrunedStatus(trace.status[id]);
 
 /** Whether the node waits in the frontier (A*) or on the depth-first stack (IDA*) at this shot. */
 export function isOpen(trace: CompactTrace, scene: Scene, id: number) {
-  if (id < scene.rangeStart || id >= scene.revealedEnd || trace.status[id] >= FIRST_PRUNED) return false;
+  if (id < scene.rangeStart || id >= scene.revealedEnd || isPrunedStatus(trace.status[id])) return false;
   const visit = trace.visitFrame[id];
   if (visit >= 0 && (visit < scene.round || (visit === scene.round && scene.phase !== "pick" && scene.phase !== "ready"))) return false;
   const replacement = trace.replacedBy[id];
@@ -136,7 +137,7 @@ export function countersAt(trace: CompactTrace, scene: Scene): Counters {
 
 export interface FrontierEntry {
   id: number;
-  f: number;
+  f: number | null;
   g: number;
   priority: number;
 }
@@ -154,7 +155,7 @@ export interface Frontier {
 export function frontierAt(trace: CompactTrace, scene: Scene, limit: number): Frontier {
   // The Java queue's actual choice goes first among equal sorting priorities.
   const chosen = scene.phase === "pick" ? scene.current : scene.next;
-  const priority = (id: number) => trace.g[id] + (trace.pathCostOnly ? 0 : trace.h[id]);
+  const priority = (id: number) => trace.pathCostOnly ? trace.g[id] : fOf(trace, id) ?? Infinity;
   const before = (a: FrontierEntry, b: FrontierEntry) => a.priority - b.priority || a.g - b.g || Number(b.id === chosen) - Number(a.id === chosen) || a.id - b.id;
   const top: FrontierEntry[] = [];
   const counts = new Map<number, number>();
@@ -162,8 +163,8 @@ export function frontierAt(trace: CompactTrace, scene: Scene, limit: number): Fr
   for (let id = scene.rangeStart; id < scene.revealedEnd; id++) {
     if (!isOpen(trace, scene, id)) continue;
     size++;
-    const entry = { id, g: trace.g[id], f: trace.g[id] + trace.h[id], priority: priority(id) };
-    counts.set(entry.priority, (counts.get(entry.priority) ?? 0) + 1);
+    const entry = { id, g: trace.g[id], f: fOf(trace, id), priority: priority(id) };
+    if (Number.isFinite(entry.priority)) counts.set(entry.priority, (counts.get(entry.priority) ?? 0) + 1);
     if (top.length === limit && before(entry, top[limit - 1]) >= 0) continue;
     let at = top.length;
     while (at > 0 && before(entry, top[at - 1]) < 0) at--;
@@ -181,7 +182,7 @@ export function frontierAt(trace: CompactTrace, scene: Scene, limit: number): Fr
   return { size, top, histogram, ties };
 }
 
-/** Smallest f that exceeded the threshold so far in this iteration: IDA*'s next threshold. */
+/** Smallest observed f above this iteration's bound; NIDA* may align the next bound to solution parity. */
 export function nextBoundAt(trace: CompactTrace, scene: Scene) {
   const last = scene.revealedEnd - 1;
   if (last < scene.rangeStart || trace.boundMinF[last] < 0) return null;
@@ -203,7 +204,7 @@ export type NodeState = "pending" | "current" | "expanded" | "open" | "supersede
 export function nodeState(trace: CompactTrace, scene: Scene, id: number): NodeState {
   if (id >= scene.revealedEnd) return "pending";
   if (id === scene.current && !scene.goal) return "current";
-  if (trace.status[id] >= FIRST_PRUNED) return "pruned";
+  if (isPrunedStatus(trace.status[id])) return "pruned";
   if (isExpanded(trace, scene, id) || (scene.goal && id === scene.current)) return "expanded";
   return isOpen(trace, scene, id) ? "open" : "superseded";
 }

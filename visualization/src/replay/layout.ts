@@ -1,4 +1,4 @@
-import { FIRST_PRUNED, type CompactTrace } from "@/data/types";
+import { isPrunedStatus, type CompactTrace } from "@/data/types";
 import type { Scene } from "./model";
 
 export const SLOT = 124; // horizontal distance between neighbouring leaves
@@ -32,7 +32,7 @@ export function layoutTree(trace: CompactTrace, scene: Scene, showPruned: boolea
   let leaves = 0;
   let maxDepth = 0;
   const member = (id: number) =>
-    id < end && (trace.status[id] < FIRST_PRUNED || showPruned || (id >= scene.childStart && id < scene.childEnd));
+    id < end && (!isPrunedStatus(trace.status[id]) || showPruned || (id >= scene.childStart && id < scene.childEnd));
 
   if (end > start) {
     const stack: number[] = [start];

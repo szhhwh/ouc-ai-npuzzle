@@ -1,5 +1,7 @@
 import type { KeyboardEvent, PointerEvent } from "react";
 import { motion } from "motion/react";
+import type { HeuristicQuality } from "@/data/types";
+import { formatEstimate } from "@/lib/labels";
 
 const W = 320;
 const H = 132;
@@ -10,18 +12,26 @@ const MARKER_SPRING = { type: "spring", stiffness: 420, damping: 40 } as const;
 
 interface HeuristicChartProps {
   /** h of the solution node at each step. */
-  hs: readonly number[];
+  hs: readonly (number | null)[];
+  qualities: readonly HeuristicQuality[];
   step: number;
   onSeek: (step: number) => void;
 }
 
 /** h along the solution against the true remaining distance; an admissible h stays on or below the dashed line. */
-export function HeuristicChart({ hs, step, onSeek }: HeuristicChartProps) {
+export function HeuristicChart({ hs, qualities, step, onSeek }: HeuristicChartProps) {
   const total = hs.length - 1;
-  const yMax = Math.max(total, ...hs, 1);
+  const yMax = Math.max(total, ...hs.filter((h): h is number => h !== null), 1);
   const x = (i: number) => PAD.left + (total ? (i / total) * PLOT_W : PLOT_W / 2);
   const y = (v: number) => PAD.top + (1 - v / yMax) * PLOT_H;
-  const hLine = hs.map((h, i) => `${i ? "L" : "M"}${x(i).toFixed(2)},${y(h).toFixed(2)}`).join("");
+  let connected = false;
+  const hLine = hs.map((h, i) => {
+    if (h === null) { connected = false; return ""; }
+    const command = connected ? "L" : "M";
+    connected = true;
+    return `${command}${x(i).toFixed(2)},${y(h).toFixed(2)}`;
+  }).join("");
+  const currentH = hs[step];
 
   const seekAt = (event: PointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -46,7 +56,7 @@ export function HeuristicChart({ hs, step, onSeek }: HeuristicChartProps) {
       aria-valuemin={0}
       aria-valuemax={total}
       aria-valuenow={step}
-      aria-valuetext={`第 ${step} 步，h ${hs[step]}，剩余 ${total - step} 步`}
+      aria-valuetext={`第 ${step} 步，h ${formatEstimate(currentH, qualities[step])}，剩余 ${total - step} 步`}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
         seekAt(event);
@@ -80,10 +90,11 @@ export function HeuristicChart({ hs, step, onSeek }: HeuristicChartProps) {
         strokeOpacity={0.7}
       />
       <path d={hLine} fill="none" className="stroke-magenta" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {qualities[step] !== "exact" && <text x={W - PAD.right} y={PAD.top + 10} textAnchor="end" className="type-data fill-magenta text-[10px]">h {formatEstimate(currentH, qualities[step])}</text>}
       <motion.g initial={false} animate={{ x: x(step) }} transition={MARKER_SPRING}>
         <line x1={0} x2={0} y1={PAD.top} y2={H - PAD.bottom} className="stroke-brass" strokeWidth={1.5} />
         <motion.circle cx={0} r={3} initial={false} animate={{ cy: y(total - step) }} transition={MARKER_SPRING} className="fill-surface stroke-ink" strokeWidth={1.25} />
-        <motion.circle cx={0} r={3.5} initial={false} animate={{ cy: y(hs[step]) }} transition={MARKER_SPRING} className="fill-magenta stroke-surface" strokeWidth={1.25} />
+        {currentH !== null && <motion.circle cx={0} r={3.5} initial={false} animate={{ cy: y(currentH) }} transition={MARKER_SPRING} className={qualities[step] === "lower-bound" ? "fill-surface stroke-magenta" : "fill-magenta stroke-surface"} strokeWidth={1.25} />}
       </motion.g>
     </svg>
   );

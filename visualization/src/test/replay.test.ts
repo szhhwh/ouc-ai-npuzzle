@@ -8,8 +8,9 @@ import { countersAt, frontierAt, isOpen, nextBoundAt, sceneAt, type Scene } from
 import astar from "./fixtures/astar.json";
 import ida from "./fixtures/ida.json";
 import nida from "./fixtures/nida.json";
+import nida4 from "./fixtures/nida4.json";
 
-const records = [...astar.results, ...ida.results, ...nida.results, ...demo.results] as unknown as RawRecord[];
+const records = [...astar.results, ...ida.results, ...nida.results, ...nida4.results, ...demo.results] as unknown as RawRecord[];
 const clone = (record: RawRecord): RawRecord => structuredClone(record);
 
 const oneMoveDijkstra: RawRecord = {
@@ -23,10 +24,10 @@ const oneMoveDijkstra: RawRecord = {
   trace: {
     complete: true,
     nodes: [
-      { id: 0, parent: null, board: [1, 2, 3, 4, 5, 6, 7, 0, 8], g: 0, h: 1, f: 1, status: "frontier" },
-      { id: 1, parent: 0, board: [1, 2, 3, 4, 5, 6, 7, 8, 0], g: 1, h: 0, f: 1, status: "frontier" },
-      { id: 2, parent: 0, board: [1, 2, 3, 4, 0, 6, 7, 5, 8], g: 1, h: 2, f: 3, status: "frontier" },
-      { id: 3, parent: 0, board: [1, 2, 3, 4, 5, 6, 0, 7, 8], g: 1, h: 2, f: 3, status: "frontier" },
+      { id: 0, parent: null, board: [1, 2, 3, 4, 5, 6, 7, 0, 8], g: 0, h: 1, f: 1, heuristicQuality: "exact", status: "frontier" },
+      { id: 1, parent: 0, board: [1, 2, 3, 4, 5, 6, 7, 8, 0], g: 1, h: 0, f: 1, heuristicQuality: "exact", status: "frontier" },
+      { id: 2, parent: 0, board: [1, 2, 3, 4, 0, 6, 7, 5, 8], g: 1, h: 2, f: 3, heuristicQuality: "exact", status: "frontier" },
+      { id: 3, parent: 0, board: [1, 2, 3, 4, 5, 6, 0, 7, 8], g: 1, h: 2, f: 3, heuristicQuality: "exact", status: "frontier" },
     ],
     frames: [
       { current: 0, children: [1, 2, 3], found: false, iteration: 0 },
@@ -64,7 +65,7 @@ describe("validateRecord", () => {
         algorithm, heuristic: "ZERO", states: [goal], goal, timeMs: 0, generated: 0, expanded: 0,
         trace: {
           complete: true,
-          nodes: [{ id: 0, parent: null, board: goal, g: 0, h: 0, f: 0, status: "frontier" }],
+          nodes: [{ id: 0, parent: null, board: goal, g: 0, h: 0, f: 0, heuristicQuality: "exact", status: "frontier" }],
           frames: [{ current: 0, children: [], found: true, iteration: 0, bound: 0 }],
           solution: [0],
         },

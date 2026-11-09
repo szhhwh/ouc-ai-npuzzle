@@ -1,4 +1,4 @@
-import { FIRST_PRUNED, STATUS_CODE, type CompactTrace, type RawRecord, type RecordDetails } from "./types";
+import { ALGORITHM_TRAITS, isPrunedStatus, HEURISTIC_QUALITY_CODE, STATUS_CODE, type CompactTrace, type RawRecord, type RecordDetails } from "./types";
 
 /** Converts a validated record into typed arrays plus the derived indexes the replay reads every frame. */
 export function compactRecord(record: RawRecord): RecordDetails {
@@ -7,12 +7,13 @@ export function compactRecord(record: RawRecord): RecordDetails {
   const size = Math.sqrt(cells);
   const nodeCount = nodes.length;
   const frameCount = frames.length;
-  const depthFirst = record.algorithm === "IDA*" || record.algorithm === "NIDA*";
+  const depthFirst = ALGORITHM_TRAITS[record.algorithm].depthFirst;
 
   const boards = new Uint8Array(nodeCount * cells);
   const parent = new Int32Array(nodeCount);
   const g = new Int32Array(nodeCount);
   const h = new Int32Array(nodeCount);
+  const heuristicQuality = new Uint8Array(nodeCount);
   const status = new Uint8Array(nodeCount);
   const reference = new Int32Array(nodeCount).fill(-1);
   const replacedBy = new Int32Array(nodeCount).fill(-1);
@@ -28,17 +29,18 @@ export function compactRecord(record: RawRecord): RecordDetails {
     boards.set(node.board, id * cells);
     parent[id] = node.parent ?? -1;
     g[id] = node.g;
-    h[id] = node.h;
+    h[id] = node.h ?? -1;
+    heuristicQuality[id] = HEURISTIC_QUALITY_CODE[node.heuristicQuality];
     const code = STATUS_CODE[node.status];
     status[id] = code;
     if (node.reference !== undefined) reference[id] = node.reference;
     if (node.status === "replaced") replacedBy[node.reference!] = id;
-    prunedPrefix[id + 1] = prunedPrefix[id] + (code >= FIRST_PRUNED ? 1 : 0);
+    prunedPrefix[id + 1] = prunedPrefix[id] + (isPrunedStatus(code) ? 1 : 0);
     if (node.parent === null) {
       roots.push(id);
       minF = minId = -1;
     }
-    if (node.status === "bound-pruned" && (minF < 0 || node.f < minF)) {
+    if (node.status === "bound-pruned" && node.f !== null && (minF < 0 || node.f < minF)) {
       minF = node.f;
       minId = id;
     }
@@ -78,11 +80,12 @@ export function compactRecord(record: RawRecord): RecordDetails {
     nodeCount,
     frameCount,
     depthFirst,
-    pathCostOnly: record.algorithm === "Dijkstra",
+    pathCostOnly: ALGORITHM_TRAITS[record.algorithm].pathCostOnly,
     boards,
     parent,
     g,
     h,
+    heuristicQuality,
     status,
     reference,
     visitFrame,
@@ -110,6 +113,9 @@ export function compactRecord(record: RawRecord): RecordDetails {
     timeMs: record.timeMs,
     generated: record.generated,
     expanded: record.expanded,
+    source: typeof record.source === "string" ? record.source : undefined,
+    sourceRevision: typeof record.sourceRevision === "string" ? record.sourceRevision : undefined,
+    timing: typeof record.timing === "string" ? record.timing : undefined,
     sourceFile: typeof record.sourceFile === "string" ? record.sourceFile : undefined,
     exportedAt: typeof record.exportedAt === "string" ? record.exportedAt : undefined,
     environment: typeof record.environment === "string" ? record.environment : undefined,

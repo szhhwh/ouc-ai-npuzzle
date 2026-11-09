@@ -1,4 +1,4 @@
-import type { Algorithm, Heuristic, NodeStatus } from "@/data/types";
+import type { Algorithm, Heuristic, HeuristicQuality, NodeStatus } from "@/data/types";
 
 export const HEURISTIC_NAMES: Record<Heuristic, string> = {
   MANHATTAN: "曼哈顿距离",
@@ -32,7 +32,7 @@ export const STATUS_REASONS: Record<NodeStatus, string> = {
   "frontier-pruned": "队列中已有更优路径，执行剪枝",
   "cycle-pruned": "检测到路径环路，执行剪枝",
   "bound-pruned": "代价值超出当前迭代界限，执行剪枝",
-  "transposition-pruned": "置换表记录已有更优路径，执行剪枝",
+  "transposition-pruned": "置换表记录已有不劣的路径，执行剪枝",
 };
 
 export type Direction = "up" | "down" | "left" | "right";
@@ -43,3 +43,7 @@ export const formatInt = (value: number) => value.toLocaleString("zh-CN");
 export const formatMs = (value: number) => value.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 export const formatBytes = (bytes: number) =>
   bytes < 1024 ? `${bytes} B` : bytes < 1024 ** 2 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+
+/** Never substitute a computed board heuristic for an estimate absent from the trace. */
+export const formatEstimate = (value: number | null, quality: HeuristicQuality) =>
+  value === null ? "未计算" : quality === "lower-bound" ? `≥ ${value}（下界）` : String(value);

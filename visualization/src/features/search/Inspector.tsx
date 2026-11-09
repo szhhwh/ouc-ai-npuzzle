@@ -4,8 +4,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { memo, useState } from "react";
 import { PuzzleBoard } from "@/components/puzzle-board";
 import { Button } from "@/components/ui/button";
-import { STATUSES, type LoadedRecord } from "@/data/types";
-import { DIRECTION_ARROWS, DIRECTION_WORDS, STATUS_REASONS, STATUS_TAGS } from "@/lib/labels";
+import { fOf, hOf, qualityOf } from "@/data/trace-values";
+import { STATUSES, type HeuristicQuality, type LoadedRecord } from "@/data/types";
+import { DIRECTION_ARROWS, DIRECTION_WORDS, STATUS_REASONS, STATUS_TAGS, formatEstimate } from "@/lib/labels";
 import { heuristicTerms, moveBetween } from "@/lib/puzzle";
 import { cn } from "@/lib/utils";
 import { boardOf, nodeState, pathTo, type NodeState, type Scene } from "@/replay/model";
@@ -37,13 +38,15 @@ export const Inspector = memo(function Inspector({ record, scene, inspected, onI
   const board = boardOf(trace, id);
   const parent = trace.parent[id];
   const g = trace.g[id];
-  const h = trace.h[id];
-  const f = g + h;
+  const h = hOf(trace, id);
+  const f = fOf(trace, id);
+  const quality = qualityOf(trace, id);
   const state = nodeState(trace, scene, id);
   const status = STATUSES[trace.status[id]];
-  const terms = heuristicTerms(record.heuristic, board, record.goal, trace.size);
+  const terms = quality === "exact" ? heuristicTerms(record.heuristic, board, record.goal, trace.size) : null;
   const move = parent >= 0 ? moveBetween(boardOf(trace, parent), board, trace.size) : null;
-  const dh = parent >= 0 ? h - trace.h[parent] : 0;
+  const parentH = parent >= 0 ? hOf(trace, parent) : null;
+  const dh = h !== null && parentH !== null && quality === "exact" && qualityOf(trace, parent) === "exact" ? h - parentH : null;
   const reference = trace.reference[id];
   const replacedBy = trace.replacedBy[id];
   const path = pathTo(trace, id);
@@ -53,7 +56,7 @@ export const Inspector = memo(function Inspector({ record, scene, inspected, onI
     : state === "pruned"
       ? { label: STATUS_TAGS[status], tone: "bg-signal-wash text-signal" }
       : STATE_LABELS[state];
-  const overBound = scene.bound >= 0 && f > scene.bound;
+  const overBound = f !== null && scene.bound >= 0 && f > scene.bound;
 
   return (
     <section aria-label="节点计算" className="flex flex-col gap-4">
@@ -95,13 +98,13 @@ export const Inspector = memo(function Inspector({ record, scene, inspected, onI
 
       <div className="type-data flex items-baseline justify-center gap-2 border-y border-rule py-3 text-[17px] font-semibold">
         <span title="已走步数"><span className="mr-1 text-[12px] font-medium text-ink-soft">g</span><NumberFlow value={g} animated={!fast} /></span>
-        <span className="font-normal text-ink-soft">+</span>
-        <span className="text-magenta" title={record.heuristic === "ZERO" ? "零估计" : "剩余估计"}><span className="mr-1 text-[12px] font-medium">h</span><NumberFlow value={h} animated={!fast} /></span>
-        <span className="font-normal text-ink-soft">=</span>
-        <span title={record.algorithm === "Dijkstra" ? "估算总代价 f" : "综合代价 f"}><span className="mr-1 text-[12px] font-medium text-ink-soft">f</span><NumberFlow value={f} animated={!fast} /></span>
+        {quality === "exact" && <span className="font-normal text-ink-soft">+</span>}
+        <span className="text-magenta" title={record.heuristic === "ZERO" ? "零估计" : "剩余估计"}><span className="mr-1 text-[12px] font-medium">h</span><EstimateValue value={h} quality={quality} fast={fast} /></span>
+        {quality === "exact" && <span className="font-normal text-ink-soft">=</span>}
+        <span title={record.trace.pathCostOnly ? "估算总代价 f" : "综合代价 f"}><span className="mr-1 text-[12px] font-medium text-ink-soft">f</span><EstimateValue value={f} quality={quality} fast={fast} /></span>
       </div>
 
-      {scene.bound >= 0 && <BoundMeter f={f} bound={scene.bound} over={overBound} />}
+      {scene.bound >= 0 && f !== null && <BoundMeter f={f} quality={quality} bound={scene.bound} over={overBound} />}
 
       {move && (
         <p className="text-[12px] leading-relaxed text-ink-soft">
@@ -148,8 +151,10 @@ export const Inspector = memo(function Inspector({ record, scene, inspected, onI
           <ChevronDown className="size-3.5 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
         </summary>
         <div className="flex flex-col gap-3 pb-3">
-          <HeuristicBreakdown record={record} board={board} terms={terms} h={h} />
-          {move && (
+          {quality === "exact" && h !== null
+            ? <HeuristicBreakdown record={record} board={board} terms={terms} h={h} />
+            : <p className="text-[12px] leading-relaxed text-ink-soft">{h === null ? "h 与 f 未计算；记录未提供启发值。" : `记录仅提供启发值下界 h ≥ ${h}，并非完整启发值。`}</p>}
+          {move && dh !== null && (
             <p className="type-data text-[11px] leading-relaxed text-ink-soft">
               g +1，h {dh > 0 ? `+${dh}` : dh === 0 ? "不变" : `−${-dh}`}，f {dh + 1 === 0 ? "不变" : dh + 1 > 0 ? `+${dh + 1}` : `−${-(dh + 1)}`}。
             </p>
@@ -192,14 +197,18 @@ export const Inspector = memo(function Inspector({ record, scene, inspected, onI
 });
 
 
+function EstimateValue({ value, quality, fast }: { value: number | null; quality: HeuristicQuality; fast: boolean }) {
+  return value === null ? <span className="text-[12px] font-medium">未计算</span> : <>{quality === "lower-bound" && "≥ "}<NumberFlow value={value} animated={!fast} /></>;
+}
+
 /** IDA*: where this node's f sits against the iteration's threshold. */
-function BoundMeter({ f, bound, over }: { f: number; bound: number; over: boolean }) {
+function BoundMeter({ f, quality, bound, over }: { f: number; quality: HeuristicQuality; bound: number; over: boolean }) {
   const scale = Math.max(bound + 4, f + 1);
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-[11px]">
         <span className="text-ink-soft">本次迭代界限 {bound}</span>
-        <span className={cn("font-semibold", over ? "text-signal" : "text-sea")}>{over ? `f = ${f} > ${bound} 超出界限` : `f = ${f} ≤ ${bound} 未超界限`}</span>
+        <span className={cn("font-semibold", over ? "text-signal" : "text-sea")}>{quality === "lower-bound" ? `f ${formatEstimate(f, quality)}${over ? "，已超界限" : ""}` : over ? `f = ${f} > ${bound} 超出界限` : `f = ${f} ≤ ${bound} 未超界限`}</span>
       </div>
       <div className="relative h-2 rounded-full bg-muted">
         <motion.div
@@ -216,7 +225,7 @@ function BoundMeter({ f, bound, over }: { f: number; bound: number; over: boolea
 
 function HeuristicBreakdown({ record, board, terms, h }: { record: LoadedRecord; board: ArrayLike<number>; terms: number[] | null; h: number }) {
   if (record.heuristic === "ZERO") {
-    return <p className="text-[12px] leading-relaxed text-ink-soft">零启发函数恒返回 0，搜索过程退化为 Dijkstra 算法。</p>;
+    return <p className="text-[12px] leading-relaxed text-ink-soft">零启发函数恒返回 0，估值只由已走步数决定。</p>;
   }
   if (!terms) {
     return (

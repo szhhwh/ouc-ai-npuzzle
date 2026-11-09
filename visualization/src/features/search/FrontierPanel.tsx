@@ -2,6 +2,8 @@ import NumberFlow from "@number-flow/react";
 import { ChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { memo } from "react";
+import { hOf, qualityOf } from "@/data/trace-values";
+import { formatEstimate } from "@/lib/labels";
 import type { LoadedRecord } from "@/data/types";
 import { cn } from "@/lib/utils";
 import { nextBoundAt, type Frontier, type FrontierEntry, type Scene } from "@/replay/model";
@@ -22,7 +24,7 @@ export const FrontierPanel = memo(function FrontierPanel(props: FrontierPanelPro
 });
 
 function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: FrontierPanelProps) {
-  const dijkstra = record.algorithm === "Dijkstra";
+  const dijkstra = record.trace.pathCostOnly;
   const histogram = frontier.histogram.slice(0, 14);
   const maxCount = Math.max(1, ...histogram.map((bin) => bin.count));
   const headLabel = scene.phase === "merge" || scene.phase === "ready" ? "下一个取出" : "队首";
@@ -39,8 +41,8 @@ function QueuePanel({ record, scene, frontier, inspected, onInspect, fast }: Fro
       <span className="type-data text-[11px] text-ink-soft">#{entry.id}</span>
       <span className="type-data flex items-baseline gap-3 text-[12px]">
         <span className={cn(dijkstra ? "font-semibold text-ink" : "text-ink-soft")}><span className="mr-1 text-[10px]">g</span>{entry.g}</span>
-        {!dijkstra && <span className="text-magenta"><span className="mr-1 text-[10px]">h</span>{entry.f - entry.g}</span>}
-        {!dijkstra && <span className="font-semibold text-ink"><span className="mr-1 text-[10px]">f</span>{entry.f}</span>}
+        {!dijkstra && <span className="text-magenta"><span className="mr-1 text-[10px]">h</span>{formatEstimate(hOf(record.trace, entry.id), qualityOf(record.trace, entry.id))}</span>}
+        {!dijkstra && <span className="font-semibold text-ink"><span className="mr-1 text-[10px]">f</span>{formatEstimate(entry.f, qualityOf(record.trace, entry.id))}</span>}
       </span>
       {rank === 0 && <span className="col-span-2 text-[10px] font-semibold text-sea">{headLabel}</span>}
     </button>
@@ -136,7 +138,7 @@ function IterationPanel({ record, scene, frontier, onInspect, onJumpIteration, f
           className="rounded-lg border border-dashed border-signal/50 px-3 py-2 text-left transition-colors enabled:hover:bg-signal-wash"
         >
           <span className="block text-[11px] text-ink-soft">超界的最小 f</span>
-          <span className="type-data text-xl font-semibold text-signal">{next ? next.f : "—"}</span>
+          <span className="type-data text-xl font-semibold text-signal">{next ? formatEstimate(next.f, qualityOf(record.trace, next.id)) : "—"}</span>
         </button>
       </div>
       <ol className="flex flex-col gap-1">

@@ -2,8 +2,9 @@ import { easeBackOut, easeCubicInOut, easeCubicOut } from "d3-ease";
 import { interpolateZoom, type ZoomView } from "d3-interpolate";
 import { select, type Selection } from "d3-selection";
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
-import { FIRST_PRUNED, STATUSES, type CompactTrace } from "@/data/types";
-import { STATUS_TAGS } from "@/lib/labels";
+import { fOf, hOf, qualityOf } from "@/data/trace-values";
+import { isPrunedStatus, STATUSES, type CompactTrace } from "@/data/types";
+import { formatEstimate, STATUS_TAGS } from "@/lib/labels";
 import { layoutTree, ROW, SLOT, type TreeLayout } from "@/replay/layout";
 import { isOpen, type Scene } from "@/replay/model";
 
@@ -614,7 +615,7 @@ export class TreeRenderer {
         if (p < 1) continue;
       }
       const onRoute = scene.goal && this.solutionMask[id] && this.solutionMask[parent] && trace.g[id] <= solutionReach;
-      this.edge(onRoute ? route : trace.status[id] >= FIRST_PRUNED ? faint : plain, px, py, cx, cy);
+      this.edge(onRoute ? route : isPrunedStatus(trace.status[id]) ? faint : plain, px, py, cx, cy);
     }
     ctx.lineCap = "round";
     ctx.lineWidth = 1.4;
@@ -779,7 +780,7 @@ export class TreeRenderer {
   private card(id: number, x: number, y: number, lod: number, scale: number, mode: "exit" | null, revealP = 1) {
     const { ctx, palette, trace } = this;
     const scene = this.scene!;
-    const pruned = trace.status[id] >= FIRST_PRUNED;
+    const pruned = isPrunedStatus(trace.status[id]);
     const current = id === scene.current && !scene.goal;
     const route = scene.goal && this.solutionMask[id] === 1;
     const open = !pruned && isOpen(trace, scene, id);
@@ -896,23 +897,30 @@ export class TreeRenderer {
       }
       // Display g, h and the estimate f = g + h; Dijkstra orders by g alone.
       const g = trace.g[id];
-      const h = trace.h[id];
+      const h = hOf(trace, id);
+      const quality = qualityOf(trace, id);
       const fy = HALF_H - 9;
       ctx.textAlign = "left";
       ctx.font = `500 10px ${MONO}`;
       ctx.fillStyle = current ? "#f4f6f5" : palette.ink;
-      const gText = String(g);
-      ctx.fillText(gText, -HALF_W + 8, fy);
-      let cursor = -HALF_W + 8 + ctx.measureText(gText).width;
-      ctx.fillStyle = current ? "rgba(244,246,245,0.6)" : palette.inkSoft;
-      ctx.fillText("+", cursor + 1, fy);
-      cursor += ctx.measureText("+").width + 2;
-      ctx.fillStyle = current ? "#f3b6d6" : palette.magenta;
-      ctx.fillText(String(h), cursor, fy);
-      ctx.textAlign = "right";
-      ctx.font = `700 11px ${MONO}`;
-      ctx.fillStyle = text;
-      ctx.fillText(`f ${g + h}`, HALF_W - 8, fy);
+      const gText = h === null ? `g ${g} · h/f 未计算` : String(g);
+      ctx.fillText(gText, -HALF_W + 8, fy, CARD_W - 16);
+      if (h !== null) {
+        let cursor = -HALF_W + 8 + ctx.measureText(gText).width;
+        ctx.fillStyle = current ? "rgba(244,246,245,0.6)" : palette.inkSoft;
+        ctx.fillText("+", cursor + 1, fy);
+        cursor += ctx.measureText("+").width + 2;
+        ctx.fillStyle = current ? "#f3b6d6" : palette.magenta;
+        ctx.fillText(`${quality === "lower-bound" ? "≥" : ""}${h}`, cursor, fy);
+        ctx.textAlign = "right";
+        ctx.font = `700 11px ${MONO}`;
+        ctx.fillStyle = text;
+        ctx.fillText(`f ${quality === "lower-bound" ? "≥" : ""}${g + h}`, HALF_W - 8, fy);
+        if (quality === "lower-bound") {
+          ctx.font = `500 8px ${SANS}`;
+          ctx.fillText("下界", HALF_W - 8, fy - 11);
+        }
+      }
     }
 
     // Rings and labels for emphasised nodes.
@@ -955,7 +963,7 @@ export class TreeRenderer {
     const index = this.hovered - this.layout.start;
     const sx = this.dispX[index] * this.transform.k + this.transform.x;
     const sy = (this.dispY[index] - HALF_H) * this.transform.k + this.transform.y - 10;
-    const label = `#${this.hovered}  g ${trace.g[this.hovered]} · h ${trace.h[this.hovered]} · f ${trace.g[this.hovered] + trace.h[this.hovered]}${trace.pathCostOnly ? " · 按 g 排序" : ""}`;
+    const label = `#${this.hovered}  g ${trace.g[this.hovered]} · h ${formatEstimate(hOf(trace, this.hovered), qualityOf(trace, this.hovered))} · f ${formatEstimate(fOf(trace, this.hovered), qualityOf(trace, this.hovered))}${trace.pathCostOnly ? " · 按 g 排序" : ""}`;
     ctx.save();
     ctx.font = `500 11px ${MONO}`;
     const width = ctx.measureText(label).width + 18;
@@ -1013,7 +1021,7 @@ export class TreeRenderer {
       for (let i = 0; i < layout.count; i++) {
         const id = layout.members[i];
         if (id >= scene.revealedEnd) continue;
-        const pruned = this.trace.status[id] >= FIRST_PRUNED;
+        const pruned = isPrunedStatus(this.trace.status[id]);
         ictx.fillStyle = scene.goal && this.solutionMask[id] ? this.palette.brass : pruned ? "#aab6bb" : isOpen(this.trace, scene, id) ? this.palette.sea : this.palette.ink;
         ictx.fillRect(layout.x[id - layout.start] * scale + ox - dot / 2, this.trace.g[id] * ROW * scale + oy - dot / 2, dot, dot);
       }
