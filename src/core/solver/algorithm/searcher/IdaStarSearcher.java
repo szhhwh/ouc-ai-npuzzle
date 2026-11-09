@@ -1,10 +1,8 @@
-package stud.solver;
+package core.solver.algorithm.searcher;
 
 import core.problem.Problem;
 import core.problem.State;
 import core.solver.algorithm.heuristic.Predictor;
-import core.solver.algorithm.searcher.AbstractSearcher;
-import core.solver.queue.Frontier;
 import core.solver.queue.Node;
 import java.util.Deque;
 import java.util.List;
@@ -12,22 +10,10 @@ import java.util.List;
 /**
  * 迭代加深 A*（IDA*）搜索器。外层循环逐步抬高 f 值界限，内层在界限内做深度优先搜索。
  *
- * <p>构造时传入的 Frontier 不参与搜索，只是为了兼容 {@code EngineFeeder.getIdaStar()} 的统一构造方式。
  */
-public class IdAStar extends AbstractSearcher {
+public class IdaStarSearcher extends AbstractSearcher {
 
-    /** Optional export observer. No observer data is allocated during ordinary searches. */
-    public interface Observer {
-        void iteration(Node root, int bound, int iteration);
-
-        void visit(Node node, boolean found, int bound, int iteration);
-
-        void generated(Node parent, List<Node> children, Predictor predictor, State goal);
-
-        void prune(Node node, String status);
-    }
-
-    private final Observer observer;
+    private final SearchObserver observer;
     private int iteration;
 
     /** f 值的正无穷哨兵。dfs 返回它表示本子树没有因 f 超过界限而被剪枝的结点，整轮都返回它表示搜索树已穷尽 */
@@ -35,25 +21,18 @@ public class IdAStar extends AbstractSearcher {
 
     // 对状态做启发式估值的预测器
     private final Predictor predictor;
-    private final Predictor rootPredictor;
     private State goalState;
 
     // 找到的目标结点，非 null 表示已找到解
     private Node goalNode;
 
-    public IdAStar(Frontier frontier, Predictor predictor) {
-        this(frontier, predictor, null);
+    public IdaStarSearcher(Predictor predictor) {
+        this(predictor, null);
     }
 
-    public IdAStar(Frontier frontier, Predictor predictor, Observer observer) {
-        super(frontier);
+    public IdaStarSearcher(Predictor predictor, SearchObserver observer) {
         this.observer = observer;
         this.predictor = predictor;
-        rootPredictor =
-                (state, goal) -> {
-                    goalState = goal;
-                    return predictor.heuristics(state, goal);
-                };
     }
 
     /**
@@ -66,7 +45,6 @@ public class IdAStar extends AbstractSearcher {
     public Deque<Node> search(Problem problem) {
         // 复位上一次搜索留下的状态。explored 在这里充当当前路径的状态集合
         explored.clear();
-        frontier.clear();
         nodesExpanded = 0;
         nodesGenerated = 0;
         goalNode = null;
@@ -76,7 +54,8 @@ public class IdAStar extends AbstractSearcher {
         }
 
         // 根结点的 h 值就是初始界限
-        Node root = problem.root(rootPredictor);
+        goalState = problem.goalState();
+        Node root = problem.root(predictor);
         int bound = root.getHeuristic();
         iteration = 0;
 
@@ -116,7 +95,7 @@ public class IdAStar extends AbstractSearcher {
 
         // f 超过界限就剪掉整棵子树，该 f 值作为下一层界限的候选
         if (f > bound) {
-            if (observer != null) observer.prune(node, "bound-pruned");
+            if (observer != null) observer.prune(node, SearchObserver.Pruning.BOUND);
             return f;
         }
 
@@ -136,14 +115,27 @@ public class IdAStar extends AbstractSearcher {
         List<Node> children = problem.childNodes(node);
         // 计数口径同 BestFirstSearcher：生成的子结点都计数，不论随后是否被剪掉
         nodesGenerated += children.size();
-        if (observer != null) observer.generated(node, children, predictor, goalState);
-        // Reject path cycles before evaluating them; use the same child list throughout.
-        for (int i = children.size() - 1; i >= 0; i--) {
-            Node child = children.get(i);
-            if (explored.contains(child.getState())) {
-                if (observer != null) observer.prune(child, "cycle-pruned");
-                children.remove(i);
-            } else child.setHeuristic(predictor, goalState);
+        // Preserve evaluation order without adding observation work to ordinary search.
+        if (observer == null) {
+            for (int i = children.size() - 1; i >= 0; i--) {
+                Node child = children.get(i);
+                if (explored.contains(child.getState())) children.remove(i);
+                else child.setHeuristic(predictor, goalState);
+            }
+        } else {
+            for (int i = children.size() - 1; i >= 0; i--) {
+                Node child = children.get(i);
+                if (!explored.contains(child.getState())) child.setHeuristic(predictor, goalState);
+            }
+            // Report generated occurrences in legal-action order, before removing cycles.
+            for (Node child : children) {
+                boolean cycle = explored.contains(child.getState());
+                observer.generated(child, cycle ? SearchObserver.HeuristicQuality.UNEVALUATED : SearchObserver.HeuristicQuality.EXACT);
+                if (cycle) observer.prune(child, SearchObserver.Pruning.CYCLE);
+            }
+            for (int i = children.size() - 1; i >= 0; i--) {
+                if (explored.contains(children.get(i).getState())) children.remove(i);
+            }
         }
 
         // 子结点按 f 升序排列后再深入。顺序不影响最优性，但先走 f 小的分支通常能更早命中目标

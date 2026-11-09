@@ -10,10 +10,13 @@ import core.solver.queue.Node;
 /**
  * 最佳优先搜索算法。 根据对Frontier中Node的排序方法，以及所采用的启发函数的不同 可以配置出不同的特性的算法。
  *  前提条件：f(n) = g(n) + h(n)；其中h(n)满足单调限制!  h(n)≡0时，Dijkstra算法；g(n)=0时，Greedy Best-First
- * final类，不能被继承的类。同学们不可改写这个类！！
+ * final类，不能被继承；可通过可选 SearchObserver 观察实际搜索决策。
  *
  */
 public final class BestFirstSearcher extends AbstractSearcher {
+
+	private final SearchObserver observer;
+	private final Frontier frontier;
 
 	private final Predictor predictor; //预测器，对当前状态进行启发式估值
 
@@ -24,25 +27,26 @@ public final class BestFirstSearcher extends AbstractSearcher {
 	 * @param predictor 具体的预测器（不在位将牌，曼哈顿距离等）
 	 */
 	public BestFirstSearcher(Frontier frontier, Predictor predictor) {
-		super(frontier);
+		this(frontier, predictor, null);
+	}
+
+	public BestFirstSearcher(Frontier frontier, Predictor predictor, SearchObserver observer) {
+		this.frontier = Objects.requireNonNull(frontier);
 		this.predictor = predictor;
+		this.observer = observer;
 	}
 
 	@Override
 	public Deque<Node> search(Problem problem) {
-		// 先判断问题是否可解，无解时直接返回解路径为null
-		if (!problem.solvable()) {
-			return null;
-		}
-
-		// 每次新的搜索开始前，先清理掉Frontier和Explored的内容
 		frontier.clear();
 		explored.clear();
 		nodesExpanded = 0;
 		nodesGenerated = 0;
+		if (!problem.solvable()) return null;
 
 		// 起始节点root
 		Node root = problem.root(predictor);
+		if (observer != null) observer.iteration(root, -1, 0);
 		frontier.offer(root);
 
 		// 搜索。。。
@@ -54,18 +58,23 @@ public final class BestFirstSearcher extends AbstractSearcher {
 			Node node = frontier.poll(); // 从优先队列frontier中取出估值最小的节点
 
 			if (problem.goal(node.getState())) { //进入目标状态
+				if (observer != null) observer.visit(node, true, -1, 0);
 				return generatePath(node);
 			}
 
+			if (observer != null) observer.visit(node, false, -1, 0);
 			explored.add(node.getState());
 
 			//对节点node进行扩展  Expansion
 			for (Node child : problem.childNodes(node, predictor)) {
 				nodesGenerated++;
-				if (!expanded(child)) // 如果新生成的节点（新扩展出的节点）还没有被扩展，则插入到frontier中。
-					frontier.offer(child);  //同学们可以试一下，
-				       // revisited也一律加到Frontier的情况，和扔掉不好的两种情况
-				// 如果已经扩展过，就舍弃掉。
+				if (observer != null) observer.generated(child, SearchObserver.HeuristicQuality.EXACT);
+				if (!expanded(child)) {
+					boolean accepted = frontier.offer(child);
+					if (observer != null) observer.offered(child, accepted);
+				} else if (observer != null) {
+					observer.prune(child, SearchObserver.Pruning.CLOSED);
+				}
 			}
 			nodesExpanded++;
 		}

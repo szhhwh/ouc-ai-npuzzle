@@ -1,115 +1,92 @@
 package core.runner;
 
 import core.problem.Problem;
+import core.solver.algorithm.heuristic.Predictor;
 import core.solver.algorithm.searcher.AbstractSearcher;
 import core.solver.algorithm.searcher.BestFirstSearcher;
+import core.solver.algorithm.searcher.IdaStarSearcher;
+import core.solver.algorithm.searcher.SearchObserver;
 import core.solver.queue.EvaluationType;
-import core.solver.algorithm.heuristic.HeuristicType;
-import core.solver.algorithm.heuristic.Predictor;
 import core.solver.queue.Frontier;
-import stud.queue.StackFrontier;
-import stud.solver.IdAStar;
-
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 
-/**
- * 为搜索算法提供各样素材。包括
- *    问题实例列表
- *    使用的Frontier，
- *    使用的启发式函数 Predictor，
- *
- */
-public abstract class EngineFeeder {
-    /**
-     * 根据存放问题输入样例的文本文件的内容，生成问题实例列表
-     * @param problemLines  字符串数组，存放的是：问题输入样例的文本文件的内容
-     * @return
-     */
+/** A problem module owns its heuristic vocabulary and registers specialized engines here. */
+public abstract class EngineFeeder<H extends Enum<H>> {
+    @FunctionalInterface
+    protected interface SearchEngineFactory {
+        AbstractSearcher create(Predictor predictor, SearchObserver observer);
+    }
+
+    private final Class<H> heuristicType;
+    private final Map<String, SearchEngineFactory> engines = new LinkedHashMap<>();
+
+    protected EngineFeeder(Class<H> heuristicType) {
+        this.heuristicType = Objects.requireNonNull(heuristicType);
+        registerEngine("astar", (predictor, observer) -> new BestFirstSearcher(
+                getFrontier(EvaluationType.FULL), predictor, observer));
+        registerEngine("ida", IdaStarSearcher::new);
+        registerEngine("dijkstra", (predictor, observer) -> new BestFirstSearcher(
+                getFrontier(EvaluationType.PATH_COST), predictor, observer));
+    }
+
+    protected final void registerEngine(String name, SearchEngineFactory factory) {
+        String normalized = name.toLowerCase(Locale.ROOT);
+        if (engines.putIfAbsent(normalized, Objects.requireNonNull(factory)) != null)
+            throw new IllegalArgumentException("Duplicate search engine: " + name);
+    }
+
     public abstract ArrayList<Problem> getProblems(ArrayList<String> problemLines);
-
-    /**
-     * 生成采取某种估值机制的Frontier；与问题无关，
-     *
-     * @param type 结点评估器的类型
-     * @return 使用评估机制的一个Frontier实例
-     */
     public abstract Frontier getFrontier(EvaluationType type);
+    public abstract Predictor getPredictor(H type);
 
-    /**
-     * 获得对状态进行估值的Predictor；不同问题有不同的估值函数
-     *
-     * @param type 不同问题的估值函数的类型
-     * @return 启发函数
-     */
-    public abstract Predictor getPredictor(HeuristicType type);
-
-    /**
-     * 用来做对比实验的IdAStar （Iterative Deepening AStar，迭代加深的AStar）
-     */
-    public final AbstractSearcher getIdaStar(Predictor predictor) {
-        // 生成按深度优先顺序访问的搜索栈
-        Frontier frontier = new StackFrontier();
-        //生成IdAStar引擎（算法实例）
-        return new IdAStar(frontier, predictor);
-    }
-
-    /**
-     * 用来做对比实验的AStar, 对所有问题都是一样的
-     * 可配置使用不同的启发函数
-     * @param predictor 可配置的启发函数
-     */
-    public final AbstractSearcher getAStar(Predictor predictor) {
-        // 获取Frontier，其Node以g(n)+h(n)的升序排列，相同时，按照g(n)的升序排列
-        Frontier frontier = getFrontier(EvaluationType.FULL);
-        // 根据frontier和predictor生成AStar引擎
-        return new BestFirstSearcher(frontier, predictor);
-    }
-
-    /**
-     * 用来做对比实验的Dijkstra，对所有的问题都是一样的
-     * 
-     * @param predictor 计算并记录的启发函数，队列排序仍只使用路径代价
-     * @return Dijkstra搜索算法
-     */
-    public final AbstractSearcher getDijkstra(Predictor predictor) {
-        // 获取Frontier，其Node以g(n)的升序排列
-        Frontier frontier = getFrontier(EvaluationType.PATH_COST);
-        return new BestFirstSearcher(frontier, predictor);
-    }
-
-    /**
-     * 按引擎名生成搜索引擎。
-     *
-     * @param engine 引擎名，取值 astar、ida、nida、dijkstra，大小写不敏感；其他取值按 astar 处理
-     * @param type 启发函数类型
-     * @return 搜索引擎实例
-     */
-    public final AbstractSearcher getSearcher(String engine, HeuristicType type) {
-        return getSearcher(engine, getPredictor(type));
-    }
-
-    /** 按引擎名和启发函数生成搜索引擎。 */
-    public final AbstractSearcher getSearcher(String engine, Predictor predictor) {
-        switch (engine.toLowerCase(Locale.ROOT)) {
-            case "ida":
-                return getIdaStar(predictor);
-            case "nida":
-                return getNIdaStar(predictor);
-            case "dijkstra":
-                return getDijkstra(predictor);
-            default:
-                return getAStar(predictor);
+    public final Predictor getPredictor(String name) {
+        try {
+            return Objects.requireNonNull(getPredictor(Enum.valueOf(heuristicType,
+                    name.trim().toUpperCase(Locale.ROOT))), "predictor");
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Unsupported heuristic: " + name
+                    + "; supported: " + heuristicNames(), exception);
         }
     }
 
-    /**
-     * N-Puzzle专用IdAStar，默认退化为通用IdAStar，由需要特化加速的Feeder覆盖。
-     *
-     * @param predictor 可配置的启发函数
-     * @return N-Puzzle专用IdAStar
-     */
-    public AbstractSearcher getNIdaStar(Predictor predictor) {
-        return getIdaStar(predictor);
+    public final List<String> heuristicNames() {
+        return Arrays.stream(heuristicType.getEnumConstants()).map(Enum::name).toList();
+    }
+
+    public final List<String> engineNames() { return List.copyOf(engines.keySet()); }
+
+    public final String validateEngine(String name) {
+        String normalized = Objects.requireNonNull(name, "engine").toLowerCase(Locale.ROOT);
+        if (!engines.containsKey(normalized)) throw new IllegalArgumentException(
+                "Unknown search engine: " + name + "; supported: " + engineNames());
+        return normalized;
+    }
+
+    public final AbstractSearcher getSearcher(String engine, H type) {
+        return getSearcher(engine, getPredictor(type), null);
+    }
+
+    public final AbstractSearcher getSearcher(String engine, H type, SearchObserver observer) {
+        return getSearcher(engine, getPredictor(type), observer);
+    }
+
+    public final AbstractSearcher getSearcher(String engine, String heuristic) {
+        validateEngine(engine);
+        return getSearcher(engine, getPredictor(heuristic), null);
+    }
+
+    public final AbstractSearcher getSearcher(String engine, Predictor predictor) {
+        return getSearcher(engine, predictor, null);
+    }
+
+    /** Ordinary execution and recorded exports use exactly the same factory. */
+    public final AbstractSearcher getSearcher(String engine, Predictor predictor, SearchObserver observer) {
+        return engines.get(validateEngine(engine)).create(Objects.requireNonNull(predictor), observer);
     }
 }

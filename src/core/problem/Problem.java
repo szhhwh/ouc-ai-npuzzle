@@ -29,6 +29,11 @@ public abstract class Problem {
         this.size = size;
     }
 
+    /** The target supplied to heuristic evaluation, independent of any observer. */
+    public final State goalState() {
+        return goal;
+    }
+
     /**
      * 当前问题是否有解
      * @return 有解，true; 无解，false

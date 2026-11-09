@@ -4,7 +4,6 @@ import algs4.util.StopwatchCPU;
 import core.problem.Problem;
 import core.solver.algorithm.searcher.AbstractSearcher;
 import core.solver.queue.Node;
-import core.solver.algorithm.heuristic.HeuristicType;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -24,9 +23,6 @@ import java.util.Scanner;
  */
 public final class SearchTester {
 
-    /** 搜索引擎的合法取值，算法与启发函数分别选择。 */
-    private static final List<String> ENGINES = List.of("astar", "ida", "nida", "dijkstra");
-
     public static void main(String[] args) throws ClassNotFoundException,
             NoSuchMethodException, IllegalAccessException,
             InvocationTargetException, InstantiationException, FileNotFoundException {
@@ -35,7 +31,7 @@ public final class SearchTester {
         if (args.length < 4) {
             System.err.println("参数不足：需要4个，实际只有" + args.length + "个");
             usage();
-            return;
+            throw new IllegalArgumentException("Invalid search arguments");
         }
 
         //args[0]：问题文件路径，预先检查文件是否存在
@@ -43,21 +39,21 @@ public final class SearchTester {
         if (!problemFile.exists()) {
             System.err.println("问题文件不存在：" + args[0]);
             usage();
-            return;
+            throw new IllegalArgumentException("Invalid search arguments");
         }
 
         //args[1]：各小组Feeder类的全限定名，反射加载并实例化
-        EngineFeeder feeder;
+        EngineFeeder<?> feeder;
         try {
-            feeder = (EngineFeeder) Class.forName(args[1]).getDeclaredConstructor().newInstance();
+            feeder = (EngineFeeder<?>) Class.forName(args[1]).getDeclaredConstructor().newInstance();
         } catch (ClassNotFoundException e) {
             System.err.println("Feeder类不存在，请检查全限定类名：" + args[1]);
             usage();
-            return;
+            throw new IllegalArgumentException("Invalid search arguments");
         } catch (ReflectiveOperationException e) {
             System.err.println("Feeder类实例化失败：" + args[1] + "（" + e.getClass().getSimpleName() + "）");
             usage();
-            return;
+            throw new IllegalArgumentException("Invalid search arguments");
         }
 
         //从文件读入所有输入样例的文本
@@ -70,21 +66,12 @@ public final class SearchTester {
         ArrayList<Problem> problems = feeder.getProblems(problemLines);
 
         //args[2]：搜索引擎
-        String engine = args[2].toLowerCase();
-        if (!ENGINES.contains(engine)) {
-            System.err.println("搜索引擎无法识别：" + args[2] + "，合法取值：" + ENGINES);
-            usage();
-            return;
-        }
+        String engine = feeder.validateEngine(args[2]);
+        List<String> heuristics = Arrays.stream(args[3].split(",", -1)).map(String::trim).toList();
+        // Validate the entire request before starting any search.
+        for (String heuristic : heuristics) feeder.getPredictor(heuristic);
 
-        //args[3]：启发函数列表，逗号分隔，大小写不敏感
-        List<HeuristicType> heuristics = parseHeuristics(args[3]);
-        if (heuristics == null) {
-            usage();
-            return;
-        }
-
-        for (HeuristicType heuristicType : heuristics) {
+        for (String heuristicType : heuristics) {
             //solveProblems方法根据不同启发函数生成不同的searcher
             //从Feeder获取所使用的搜索引擎（AStar，IDAStar等），     
             solveProblems(problems, feeder.getSearcher(engine, heuristicType), engine, heuristicType);
@@ -97,37 +84,9 @@ public final class SearchTester {
      */
     private static void usage() {
         System.err.println("用法：<问题文件> <Feeder全限定类名> <搜索引擎> <启发函数列表>");
-        System.err.println("搜索引擎取值：" + ENGINES);
-        System.err.println("启发函数取值：" + Arrays.toString(HeuristicType.values()));
+        System.err.println("可用引擎和启发函数由所选 Feeder 模块提供。");
         System.err.println("例1：resources/pathfinding.txt stud.runner.WalkerFeeder astar PF_GRID,PF_EUCLID");
         System.err.println("例2：resources/problems-stage3.txt stud.g01.runner.PuzzleFeeder nida DISJOINT_PATTERN");
-    }
-
-    /**
-     * 解析逗号分隔的启发函数列表
-     * @param spec 逗号分隔的启发函数名，大小写不敏感
-     * @return 启发函数类型列表，无法识别时返回 null
-     */
-    private static List<HeuristicType> parseHeuristics(String spec) {
-        List<HeuristicType> heuristics = new ArrayList<>();
-        for (String token : spec.split(",")) {
-            String name = token.trim().toUpperCase();
-            if (name.isEmpty()) {
-                continue;
-            }
-            try {
-                heuristics.add(HeuristicType.valueOf(name));
-            } catch (IllegalArgumentException e) {
-                System.err.println(
-                        "启发函数无法识别：" + token.trim() + "，合法取值：" + Arrays.toString(HeuristicType.values()));
-                return null;
-            }
-        }
-        if (heuristics.isEmpty()) {
-            System.err.println("启发函数列表为空");
-            return null;
-        }
-        return heuristics;
     }
 
     /**
@@ -141,7 +100,7 @@ public final class SearchTester {
             ArrayList<Problem> problems,
             AbstractSearcher searcher,
             String engine,
-            HeuristicType heuristicType) {
+            String heuristicType) {
         for (Problem problem : problems) {
             // 使用AStar引擎求解问题
             StopwatchCPU timer1 = new StopwatchCPU();

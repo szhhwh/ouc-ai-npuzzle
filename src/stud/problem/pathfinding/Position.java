@@ -1,12 +1,11 @@
 package stud.problem.pathfinding;
 
-import static core.solver.algorithm.heuristic.HeuristicType.*;
 import static stud.problem.pathfinding.Direction.ROOT2;
 import static stud.problem.pathfinding.Direction.SCALE;
+import static stud.problem.pathfinding.PathHeuristicType.*;
 
 import core.problem.Action;
 import core.problem.State;
-import core.solver.algorithm.heuristic.HeuristicType;
 import core.solver.algorithm.heuristic.Predictor;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -53,8 +52,8 @@ public class Position extends State {
     }
 
     // 启发函数类型到实现方法的映射
-    private static final EnumMap<HeuristicType, Predictor> predictors =
-            new EnumMap<>(HeuristicType.class);
+    private static final EnumMap<PathHeuristicType, Predictor> predictors =
+            new EnumMap<>(PathHeuristicType.class);
 
     static {
         predictors.put(ZERO, (state, goal) -> 0);
@@ -64,7 +63,7 @@ public class Position extends State {
         predictors.put(PF_GRID, (state, goal) -> ((Position) state).gridDistance((Position) goal));
     }
 
-    public static Predictor predictor(HeuristicType type) {
+    public static Predictor predictor(PathHeuristicType type) {
         return predictors.get(type);
     }
 

@@ -2,7 +2,6 @@ package stud.runner;
 
 import core.problem.Problem;
 import core.runner.EngineFeeder;
-import core.solver.algorithm.heuristic.HeuristicType;
 import core.solver.algorithm.heuristic.Predictor;
 import core.solver.queue.EvaluationType;
 import core.solver.queue.Frontier;
@@ -10,11 +9,16 @@ import core.solver.queue.Node;
 import java.util.ArrayList;
 import stud.problem.pathfinding.GridType;
 import stud.problem.pathfinding.PathFinding;
+import stud.problem.pathfinding.PathHeuristicType;
 import stud.problem.pathfinding.Position;
 import stud.queue.ListFrontier;
 
 /** 寻路问题的 EngineFeeder。 */
-public class WalkerFeeder extends EngineFeeder {
+public class WalkerFeeder extends EngineFeeder<PathHeuristicType> {
+    public WalkerFeeder() {
+        super(PathHeuristicType.class);
+    }
+
     @Override
     public ArrayList<Problem> getProblems(ArrayList<String> problemLines) {
         // 第一行是地图规模
@@ -85,7 +89,7 @@ public class WalkerFeeder extends EngineFeeder {
      * @return 启发函数
      */
     @Override
-    public Predictor getPredictor(HeuristicType type) {
+    public Predictor getPredictor(PathHeuristicType type) {
         return Position.predictor(type);
     }
 }
